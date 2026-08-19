@@ -169,6 +169,40 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 /* Acervo */
 .panel-head { margin-bottom: 18px; }
+.acervo-filtro-ativo {
+  display: inline-flex; align-items: center; gap: 8px; margin-top: 10px; background: var(--accent-soft); color: var(--accent);
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; padding: 5px 10px; border-radius: 6px;
+}
+.acervo-filtro-ativo button {
+  background: none; border: none; color: var(--accent); cursor: pointer; font-weight: 700; padding: 0;
+}
+
+/* Painel gerencial */
+.dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 28px; }
+.dash-card {
+  background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
+  display: flex; flex-direction: column; gap: 4px; cursor: pointer; text-align: left; font-family: inherit;
+  transition: box-shadow .15s, transform .15s;
+}
+.dash-card:hover { box-shadow: var(--shadow); transform: translateY(-1px); border-color: var(--accent); }
+.dash-numero { font-family: 'Fraunces', serif; font-size: 32px; font-weight: 700; color: var(--ink); }
+.dash-label { font-size: 11px; color: var(--ink-soft); text-transform: uppercase; letter-spacing: .03em; font-family: 'IBM Plex Mono', monospace; }
+.dash-card-disponivel .dash-numero { color: var(--accent); }
+.dash-card-emprestado .dash-numero { color: var(--stamp); }
+.dash-secoes { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+.dash-secao { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.dash-secao h3 { font-size: 15px; margin-bottom: 14px; }
+.dash-eixo-row { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; font-size: 13px; }
+.dash-eixo-nome { width: 130px; flex-shrink: 0; color: var(--ink-soft); }
+.dash-eixo-barra-fundo { flex: 1; background: var(--paper); border-radius: 4px; height: 10px; overflow: hidden; }
+.dash-eixo-barra { display: block; height: 100%; background: var(--accent); border-radius: 4px; }
+.dash-eixo-num { width: 22px; text-align: right; font-family: 'IBM Plex Mono', monospace; font-size: 12px; flex-shrink: 0; }
+.dash-recente-item { display: flex; justify-content: space-between; gap: 10px; padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+.dash-recente-item:last-child { border-bottom: none; }
+.dash-recente-data { color: var(--ink-soft); font-size: 11px; font-family: 'IBM Plex Mono', monospace; flex-shrink: 0; }
+@media (max-width: 720px) {
+  .dash-secoes { grid-template-columns: 1fr; }
+}
 .search { width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; font-family: inherit; }
 .empty { color: var(--ink-soft); font-style: italic; padding: 24px 0; }
 .livro-card { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
@@ -287,18 +321,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   </header>
 
   <nav class="tabs" id="tabs">
-    <button class="tab active" data-tab="cadastro">Cadastrar livro</button>
+    <button class="tab active" data-tab="dashboard">Painel</button>
+    <button class="tab" data-tab="cadastro">Cadastrar livro</button>
     <button class="tab" data-tab="acervo">Acervo</button>
     <button class="tab" data-tab="etiquetas">Etiquetas</button>
     <button class="tab" data-tab="enderecos">Ruas e prateleiras</button>
     <button class="tab tab-soon" data-tab="emprestimo">Empréstimo</button>
     <button class="tab tab-soon" data-tab="devolucao">Devolução</button>
-    <button class="tab tab-soon" data-tab="dashboard">Painel</button>
   </nav>
 
   <main class="content">
 
-    <section id="panel-cadastro" class="panel active">
+    <section id="panel-cadastro" class="panel">
       <div class="scan-card">
         <label class="scan-label" for="scan-input">Escaneie o código de barras ou digite o ISBN e pressione Enter</label>
         <div class="scan-row">
@@ -412,6 +446,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <section id="panel-acervo" class="panel">
       <div class="panel-head">
         <input id="acervo-busca" class="search" placeholder="Buscar por título ou autor…" />
+        <div id="acervo-filtro-ativo" class="acervo-filtro-ativo" hidden></div>
       </div>
       <div id="acervo-lista" class="acervo-lista">
         <p class="empty">Nenhum livro cadastrado ainda. Escaneie o primeiro código de barras na aba Cadastrar livro.</p>
@@ -462,8 +497,40 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <section id="panel-devolucao" class="panel">
       <div class="soon"><h3>Devolução</h3><p>Módulo previsto na Fase 1 do roadmap — ainda não implementado nesta versão.</p></div>
     </section>
-    <section id="panel-dashboard" class="panel">
-      <div class="soon"><h3>Painel gerencial</h3><p>Indicadores clicáveis com detalhamento dos registros, conforme especificação — ainda não implementado nesta versão.</p></div>
+    <section id="panel-dashboard" class="panel active">
+      <div class="dash-grid">
+        <button type="button" class="dash-card" id="dash-titulos">
+          <span class="dash-numero" id="dash-titulos-num">0</span>
+          <span class="dash-label">Títulos cadastrados</span>
+        </button>
+        <button type="button" class="dash-card" id="dash-exemplares">
+          <span class="dash-numero" id="dash-exemplares-num">0</span>
+          <span class="dash-label">Exemplares no acervo</span>
+        </button>
+        <button type="button" class="dash-card dash-card-disponivel" id="dash-disponiveis">
+          <span class="dash-numero" id="dash-disponiveis-num">0</span>
+          <span class="dash-label">Disponíveis</span>
+        </button>
+        <button type="button" class="dash-card dash-card-emprestado" id="dash-emprestados">
+          <span class="dash-numero" id="dash-emprestados-num">0</span>
+          <span class="dash-label">Emprestados</span>
+        </button>
+        <button type="button" class="dash-card" id="dash-etiquetas-pendentes">
+          <span class="dash-numero" id="dash-etiquetas-pendentes-num">0</span>
+          <span class="dash-label">Etiquetas pendentes</span>
+        </button>
+      </div>
+
+      <div class="dash-secoes">
+        <div class="dash-secao">
+          <h3>Distribuição por eixo técnico</h3>
+          <div id="dash-eixos"></div>
+        </div>
+        <div class="dash-secao">
+          <h3>Últimos títulos cadastrados</h3>
+          <div id="dash-recentes"></div>
+        </div>
+      </div>
     </section>
 
   </main>
@@ -534,6 +601,7 @@ document.querySelectorAll('.tab').forEach(function (btn) {
     document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
     if (btn.dataset.tab === 'cadastro') document.getElementById('scan-input').focus();
     if (btn.dataset.tab === 'etiquetas') renderListaEtiquetas();
+    if (btn.dataset.tab === 'dashboard') renderDashboard();
   });
 });
 
@@ -645,10 +713,12 @@ function attachListeners() {
   db.ref('livros').on('value', function (snap) {
     livrosCache = snap.val() || {};
     renderAcervo();
+    renderDashboard();
   });
   db.ref('exemplares').on('value', function (snap) {
     exemplaresCache = snap.val() || {};
     renderAcervo();
+    renderDashboard();
   });
 }
 
@@ -1202,6 +1272,30 @@ async function processarPlanilha(file) {
 }
 
 // ================= Acervo: listagem =================
+let filtroStatusAcervo = '';
+
+function atualizarFiltroAtivoAcervo() {
+  const el = document.getElementById('acervo-filtro-ativo');
+  if (filtroStatusAcervo) {
+    el.hidden = false;
+    el.innerHTML = 'Filtrando por status: <strong>' + escapeHtml(filtroStatusAcervo) + '</strong> <button type="button" id="btn-limpar-filtro-status">✕</button>';
+    document.getElementById('btn-limpar-filtro-status').addEventListener('click', function () {
+      filtroStatusAcervo = '';
+      atualizarFiltroAtivoAcervo();
+      renderAcervo();
+    });
+  } else {
+    el.hidden = true;
+    el.innerHTML = '';
+  }
+}
+
+function irParaAcervoComFiltro(status) {
+  filtroStatusAcervo = status;
+  atualizarFiltroAtivoAcervo();
+  document.querySelector('.tab[data-tab="acervo"]').click();
+}
+
 document.getElementById('acervo-busca').addEventListener('input', renderAcervo);
 
 function renderAcervo() {
@@ -1209,19 +1303,27 @@ function renderAcervo() {
   const termo = document.getElementById('acervo-busca').value.trim().toLowerCase();
   const livrosOrdenados = Object.entries(livrosCache).sort(function (a, b) { return (b[1].criado_em || 0) - (a[1].criado_em || 0); });
   const filtrados = livrosOrdenados.filter(function (entry) {
-    if (!termo) return true;
-    const l = entry[1];
-    return (l.titulo || '').toLowerCase().includes(termo) || (l.autores || '').toLowerCase().includes(termo);
+    const id = entry[0], l = entry[1];
+    if (termo) {
+      const bate = (l.titulo || '').toLowerCase().includes(termo) || (l.autores || '').toLowerCase().includes(termo);
+      if (!bate) return false;
+    }
+    if (filtroStatusAcervo) {
+      const temStatus = Object.values(exemplaresCache).some(function (ex) { return ex.livro_id === id && ex.status === filtroStatusAcervo; });
+      if (!temStatus) return false;
+    }
+    return true;
   });
 
   if (filtrados.length === 0) {
-    cont.innerHTML = '<p class="empty">Nenhum livro cadastrado ainda. Escaneie o primeiro código de barras na aba Cadastrar livro.</p>';
+    cont.innerHTML = '<p class="empty">' + (Object.keys(livrosCache).length === 0 ? 'Nenhum livro cadastrado ainda. Escaneie o primeiro código de barras na aba Cadastrar livro.' : 'Nenhum resultado para esse filtro.') + '</p>';
     return;
   }
 
   cont.innerHTML = filtrados.map(function (entry) {
     const id = entry[0], l = entry[1];
-    const exemplares = Object.entries(exemplaresCache).filter(function (e) { return e[1].livro_id === id; });
+    let exemplares = Object.entries(exemplaresCache).filter(function (e) { return e[1].livro_id === id; });
+    if (filtroStatusAcervo) exemplares = exemplares.filter(function (e) { return e[1].status === filtroStatusAcervo; });
     const chipsExemplares = exemplares.map(function (e) {
       const exId = e[0], ex = e[1];
       const rua = ruasCache[ex.rua_id];
@@ -1496,6 +1598,59 @@ document.getElementById('btn-imprimir-etiquetas').addEventListener('click', asyn
     selecionados.forEach(function (exId) { updates['exemplares/' + exId + '/etiqueta_impressa'] = true; });
     try { await db.ref().update(updates); } catch (e) { console.warn('Não foi possível marcar etiquetas como impressas', e); }
   }
+});
+
+// ================= Painel gerencial =================
+function renderDashboard() {
+  const totalTitulos = Object.keys(livrosCache).length;
+  const exemplaresArr = Object.values(exemplaresCache);
+  const totalExemplares = exemplaresArr.length;
+  const disponiveis = exemplaresArr.filter(function (ex) { return ex.status === 'Disponível'; }).length;
+  const emprestados = exemplaresArr.filter(function (ex) { return ex.status === 'Emprestado'; }).length;
+  const etiquetasPendentes = exemplaresArr.filter(function (ex) { return !ex.etiqueta_impressa; }).length;
+
+  document.getElementById('dash-titulos-num').textContent = totalTitulos;
+  document.getElementById('dash-exemplares-num').textContent = totalExemplares;
+  document.getElementById('dash-disponiveis-num').textContent = disponiveis;
+  document.getElementById('dash-emprestados-num').textContent = emprestados;
+  document.getElementById('dash-etiquetas-pendentes-num').textContent = etiquetasPendentes;
+
+  const eixos = ['Administração', 'Recursos Humanos', 'Logística', 'Formação Geral', 'Não definido'];
+  const contagemEixos = {};
+  eixos.forEach(function (e) { contagemEixos[e] = 0; });
+  Object.values(livrosCache).forEach(function (l) {
+    const eixo = l.eixo_tecnico || 'Não definido';
+    contagemEixos[eixo] = (contagemEixos[eixo] || 0) + 1;
+  });
+  const maxEixo = Math.max.apply(null, Object.values(contagemEixos).concat([1]));
+  document.getElementById('dash-eixos').innerHTML = eixos.map(function (e) {
+    const n = contagemEixos[e] || 0;
+    const pct = maxEixo ? Math.round(n / maxEixo * 100) : 0;
+    return '<div class="dash-eixo-row"><span class="dash-eixo-nome">' + escapeHtml(e) + '</span>' +
+      '<span class="dash-eixo-barra-fundo"><span class="dash-eixo-barra" style="width:' + pct + '%"></span></span>' +
+      '<span class="dash-eixo-num">' + n + '</span></div>';
+  }).join('');
+
+  const recentes = Object.entries(livrosCache).sort(function (a, b) { return (b[1].criado_em || 0) - (a[1].criado_em || 0); }).slice(0, 5);
+  const contRecentes = document.getElementById('dash-recentes');
+  if (recentes.length === 0) {
+    contRecentes.innerHTML = '<p class="empty">Nenhum título cadastrado ainda.</p>';
+  } else {
+    contRecentes.innerHTML = recentes.map(function (entry) {
+      const l = entry[1];
+      const data = l.criado_em ? new Date(l.criado_em).toLocaleDateString('pt-BR') : '';
+      return '<div class="dash-recente-item"><span>' + escapeHtml(l.titulo) + '</span><span class="dash-recente-data">' + data + '</span></div>';
+    }).join('');
+  }
+}
+
+document.getElementById('dash-titulos').addEventListener('click', function () { irParaAcervoComFiltro(''); });
+document.getElementById('dash-exemplares').addEventListener('click', function () { irParaAcervoComFiltro(''); });
+document.getElementById('dash-disponiveis').addEventListener('click', function () { irParaAcervoComFiltro('Disponível'); });
+document.getElementById('dash-emprestados').addEventListener('click', function () { irParaAcervoComFiltro('Emprestado'); });
+document.getElementById('dash-etiquetas-pendentes').addEventListener('click', function () {
+  document.querySelector('.tab[data-tab="etiquetas"]').click();
+  document.getElementById('btn-selecionar-novos').click();
 });
 
 function slug(s) {
