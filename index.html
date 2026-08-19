@@ -94,10 +94,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   background-image: repeating-linear-gradient(90deg, transparent, transparent 9px, rgba(255,255,255,.06) 9px, rgba(255,255,255,.06) 10px);
 }
 .scan-label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: .05em; margin-bottom: 12px; opacity: .85; }
+.scan-row { display: flex; gap: 8px; max-width: 420px; margin: 0 auto; }
 .scan-input {
-  width: 100%; max-width: 420px; padding: 14px 16px; font-size: 20px; font-family: 'IBM Plex Mono', monospace;
+  flex: 1; padding: 14px 16px; font-size: 20px; font-family: 'IBM Plex Mono', monospace;
   border-radius: 8px; border: none; text-align: center; letter-spacing: .04em;
 }
+.btn-clear {
+  flex-shrink: 0; width: 48px; background: rgba(255,255,255,.14); color: var(--white); border: none;
+  border-radius: 8px; font-size: 18px; cursor: pointer;
+}
+.btn-clear:hover { background: rgba(255,255,255,.24); }
 .scan-status { margin-top: 14px; font-size: 13px; min-height: 18px; }
 
 /* Found card */
@@ -110,6 +116,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .found-info h3 { font-size: 18px; margin: 4px 0 2px; }
 .found-info p { margin: 0; color: var(--ink-soft); font-size: 14px; }
 .found-card[hidden] { display: none; }
+.fontes-extra { margin-top: 14px; font-size: 12px; color: var(--ink-soft); }
+.fontes-extra .fontes-label { margin-right: 8px; }
+.fontes-extra a { color: var(--accent); text-decoration: none; margin-right: 12px; font-weight: 600; }
+.fontes-extra a:hover { text-decoration: underline; }
 
 /* Form */
 .form { margin-top: 20px; }
@@ -207,7 +217,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <section id="panel-cadastro" class="panel active">
       <div class="scan-card">
         <label class="scan-label" for="scan-input">Escaneie o código de barras ou digite o ISBN e pressione Enter</label>
-        <input id="scan-input" class="scan-input mono" autocomplete="off" placeholder="978XXXXXXXXXX" autofocus />
+        <div class="scan-row">
+          <input id="scan-input" class="scan-input mono" autocomplete="off" placeholder="978XXXXXXXXXX" autofocus />
+          <button type="button" id="btn-limpar-scan" class="btn-clear" title="Limpar campo">✕</button>
+        </div>
         <div id="scan-status" class="scan-status"></div>
       </div>
 
@@ -218,6 +231,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <h3 id="found-title"></h3>
           <p id="found-meta"></p>
         </div>
+      </div>
+
+      <div id="fontes-extra" class="fontes-extra" hidden>
+        <span class="fontes-label">Verificar também em:</span>
+        <a id="link-cbl" href="#" target="_blank" rel="noopener">CBL</a>
+        <a id="link-skoob" href="#" target="_blank" rel="noopener">Skoob</a>
+        <a id="link-goodreads" href="#" target="_blank" rel="noopener">Goodreads</a>
+        <a id="link-amazon" href="#" target="_blank" rel="noopener">Amazon</a>
+        <a id="link-isbnsearch" href="#" target="_blank" rel="noopener">ISBNSearch</a>
       </div>
 
       <form id="livro-form" class="form" hidden novalidate>
@@ -523,16 +545,49 @@ async function iniciarBusca(valor) {
     preencherFormulario(resultado, isbn);
     mostrarCardEncontrado(resultado);
   } else {
-    scanStatus.textContent = 'Nenhum resultado encontrado no Google Books nem no Open Library. Preencha os dados manualmente.';
+    scanStatus.textContent = 'Nenhum resultado encontrado na BrasilAPI, Google Books ou Open Library. Preencha os dados manualmente.';
     limparFormulario();
     document.getElementById('f-isbn').value = isbn;
     livroForm.hidden = false;
     document.getElementById('f-titulo').focus();
   }
+  mostrarFontesExtras(isbn);
   buscaEmAndamento = false;
 }
 
+function mostrarFontesExtras(isbn) {
+  document.getElementById('link-cbl').href = 'https://www.cblservicos.org.br/isbn/pesquisa/';
+  document.getElementById('link-skoob').href = 'https://www.skoob.com.br/';
+  document.getElementById('link-goodreads').href = 'https://www.goodreads.com/search?q=' + encodeURIComponent(isbn);
+  document.getElementById('link-amazon').href = 'https://www.amazon.com.br/s?k=' + encodeURIComponent(isbn);
+  document.getElementById('link-isbnsearch').href = 'https://isbnsearch.org/isbn/' + encodeURIComponent(isbn);
+  document.getElementById('fontes-extra').hidden = false;
+}
+
+async function buscarNaBrasilAPI(isbn) {
+  try {
+    const res = await fetch('https://brasilapi.com.br/api/isbn/v1/' + isbn);
+    if (!res.ok) return null;
+    const info = await res.json();
+    if (!info || !info.title) return null;
+    return {
+      fonte: 'BrasilAPI' + (info.provider ? ' (' + info.provider + ')' : ''),
+      titulo: info.title || '',
+      autores: (info.authors || []).join(', '),
+      editora: info.publisher || '',
+      ano: info.year ? String(info.year) : '',
+      sinopse: info.synopsis || '',
+      capa_url: info.cover_url || '',
+      categoria: (info.subjects && info.subjects[0]) || ''
+    };
+  } catch (e) { console.warn('BrasilAPI indisponível', e); }
+  return null;
+}
+
 async function buscarLivroPorISBN(isbn) {
+  const viaBrasilAPI = await buscarNaBrasilAPI(isbn);
+  if (viaBrasilAPI) return viaBrasilAPI;
+
   try {
     const res = await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:' + isbn);
     const data = await res.json();
@@ -600,8 +655,18 @@ function limparFormulario() {
 document.getElementById('btn-cancelar').addEventListener('click', function () {
   livroForm.hidden = true;
   foundCard.hidden = true;
+  document.getElementById('fontes-extra').hidden = true;
   scanStatus.textContent = '';
   scanInput.value = '';
+  scanInput.focus();
+});
+
+document.getElementById('btn-limpar-scan').addEventListener('click', function () {
+  scanInput.value = '';
+  scanStatus.textContent = '';
+  foundCard.hidden = true;
+  livroForm.hidden = true;
+  document.getElementById('fontes-extra').hidden = true;
   scanInput.focus();
 });
 
@@ -650,6 +715,7 @@ livroForm.addEventListener('submit', async function (e) {
     scanStatus.textContent = qtd + ' exemplar(es) salvo(s) com sucesso.';
     livroForm.hidden = true;
     foundCard.hidden = true;
+    document.getElementById('fontes-extra').hidden = true;
     scanInput.value = '';
     scanInput.focus();
   } catch (err) {
