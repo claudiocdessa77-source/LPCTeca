@@ -116,6 +116,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .found-info h3 { font-size: 18px; margin: 4px 0 2px; }
 .found-info p { margin: 0; color: var(--ink-soft); font-size: 14px; }
 .found-card[hidden] { display: none; }
+.existing-count { margin-top: 6px; font-weight: 600; color: var(--ink); }
 .fontes-extra { margin-top: 14px; font-size: 12px; color: var(--ink-soft); }
 .fontes-extra .fontes-label { margin-right: 8px; }
 .fontes-extra a { color: var(--accent); text-decoration: none; margin-right: 12px; font-weight: 600; }
@@ -232,6 +233,28 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <p id="found-meta"></p>
         </div>
       </div>
+
+      <div id="existing-card" class="found-card" hidden>
+        <img id="existing-cover" class="found-cover" alt="Capa do livro já cadastrado" />
+        <div class="found-info">
+          <span class="found-source">JÁ CADASTRADO</span>
+          <h3 id="existing-title"></h3>
+          <p id="existing-meta"></p>
+          <p id="existing-count" class="existing-count"></p>
+        </div>
+      </div>
+
+      <form id="add-exemplar-form" class="form" hidden novalidate>
+        <div class="form-grid">
+          <div class="field field-sm"><label>Rua *</label><select id="add-rua" required></select></div>
+          <div class="field field-sm"><label>Prateleira *</label><select id="add-prateleira" required></select></div>
+          <div class="field field-sm"><label>Nº de novos exemplares *</label><input id="add-qtd" type="number" min="1" value="1" required /></div>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="btn-cancelar-add" class="btn btn-ghost">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Adicionar exemplar(es)</button>
+        </div>
+      </form>
 
       <div id="fontes-extra" class="fontes-extra" hidden>
         <span class="fontes-label">Verificar também em:</span>
@@ -432,8 +455,7 @@ function attachListeners() {
 
 // ================= Ruas e Prateleiras =================
 function renderRuasSelects() {
-  const selects = [document.getElementById('f-rua'), document.getElementById('prat-rua')];
-  selects.forEach(function (sel) {
+  [document.getElementById('f-rua'), document.getElementById('prat-rua'), document.getElementById('add-rua')].forEach(function (sel) {
     const atual = sel.value;
     sel.innerHTML = '<option value="">Selecione…</option>';
     Object.entries(ruasCache).sort(function (a, b) { return (a[1].ordem || 0) - (b[1].ordem || 0); }).forEach(function (entry) {
@@ -446,12 +468,12 @@ function renderRuasSelects() {
     if (atual) sel.value = atual;
   });
   atualizarPrateleirasDoFormulario();
+  atualizarPrateleirasDoFormularioAdd();
 }
 
-document.getElementById('f-rua').addEventListener('change', atualizarPrateleirasDoFormulario);
-function atualizarPrateleirasDoFormulario() {
-  const ruaId = document.getElementById('f-rua').value;
-  const sel = document.getElementById('f-prateleira');
+function popularPrateleiras(ruaSelId, prateleiraSelId) {
+  const ruaId = document.getElementById(ruaSelId).value;
+  const sel = document.getElementById(prateleiraSelId);
   sel.innerHTML = '<option value="">Selecione…</option>';
   Object.entries(prateleirasCache)
     .filter(function (entry) { return entry[1].rua_id === ruaId; })
@@ -464,6 +486,17 @@ function atualizarPrateleirasDoFormulario() {
       sel.appendChild(opt);
     });
 }
+
+document.getElementById('f-rua').addEventListener('change', atualizarPrateleirasDoFormulario);
+function atualizarPrateleirasDoFormulario() {
+  popularPrateleiras('f-rua', 'f-prateleira');
+}
+
+document.getElementById('add-rua').addEventListener('change', atualizarPrateleirasDoFormularioAdd);
+function atualizarPrateleirasDoFormularioAdd() {
+  popularPrateleiras('add-rua', 'add-prateleira');
+}
+
 
 document.getElementById('btn-add-rua').addEventListener('click', function () {
   if (!db) { firebaseIndisponivel(); return; }
@@ -521,6 +554,8 @@ const scanInput = document.getElementById('scan-input');
 const scanStatus = document.getElementById('scan-status');
 const foundCard = document.getElementById('found-card');
 const livroForm = document.getElementById('livro-form');
+const existingCard = document.getElementById('existing-card');
+const addExemplarForm = document.getElementById('add-exemplar-form');
 let buscaEmAndamento = false;
 
 scanInput.addEventListener('keydown', function (e) {
@@ -530,14 +565,43 @@ scanInput.addEventListener('keydown', function (e) {
   }
 });
 
+function encontrarLivroExistentePorISBN(isbn) {
+  const entry = Object.entries(livrosCache).find(function (e) { return e[1].isbn === isbn; });
+  return entry ? { id: entry[0], livro: entry[1] } : null;
+}
+
+function mostrarLivroExistente(livroId, livro) {
+  const qtdAtual = Object.values(exemplaresCache).filter(function (ex) { return ex.livro_id === livroId; }).length;
+  document.getElementById('existing-title').textContent = livro.titulo || '(sem título)';
+  document.getElementById('existing-meta').textContent = [livro.autores, livro.editora, livro.ano].filter(Boolean).join(' · ');
+  document.getElementById('existing-count').textContent = qtdAtual + ' exemplar(es) já cadastrado(s) neste título.';
+  const cover = document.getElementById('existing-cover');
+  if (livro.capa_url) { cover.src = livro.capa_url; cover.style.display = ''; } else { cover.style.display = 'none'; }
+  existingCard.hidden = false;
+  addExemplarForm.dataset.livroId = livroId;
+  addExemplarForm.hidden = false;
+  renderRuasSelects();
+}
+
 async function iniciarBusca(valor) {
   const isbn = (valor || '').replace(/[^0-9Xx]/g, '');
   if (!isbn || buscaEmAndamento) return;
   buscaEmAndamento = true;
-  scanStatus.textContent = 'Buscando nas bases de dados…';
   foundCard.hidden = true;
   livroForm.hidden = true;
+  existingCard.hidden = true;
+  addExemplarForm.hidden = true;
+  document.getElementById('fontes-extra').hidden = true;
 
+  const existente = encontrarLivroExistentePorISBN(isbn);
+  if (existente) {
+    scanStatus.textContent = 'Este ISBN já está cadastrado — nenhum título novo foi criado.';
+    mostrarLivroExistente(existente.id, existente.livro);
+    buscaEmAndamento = false;
+    return;
+  }
+
+  scanStatus.textContent = 'Buscando nas bases de dados…';
   const resultado = await buscarLivroPorISBN(isbn);
 
   if (resultado) {
@@ -554,6 +618,7 @@ async function iniciarBusca(valor) {
   mostrarFontesExtras(isbn);
   buscaEmAndamento = false;
 }
+
 
 function mostrarFontesExtras(isbn) {
   document.getElementById('link-cbl').href = 'https://www.cblservicos.org.br/isbn/pesquisa/';
@@ -655,7 +720,17 @@ function limparFormulario() {
 document.getElementById('btn-cancelar').addEventListener('click', function () {
   livroForm.hidden = true;
   foundCard.hidden = true;
+  existingCard.hidden = true;
+  addExemplarForm.hidden = true;
   document.getElementById('fontes-extra').hidden = true;
+  scanStatus.textContent = '';
+  scanInput.value = '';
+  scanInput.focus();
+});
+
+document.getElementById('btn-cancelar-add').addEventListener('click', function () {
+  existingCard.hidden = true;
+  addExemplarForm.hidden = true;
   scanStatus.textContent = '';
   scanInput.value = '';
   scanInput.focus();
@@ -666,30 +741,90 @@ document.getElementById('btn-limpar-scan').addEventListener('click', function ()
   scanStatus.textContent = '';
   foundCard.hidden = true;
   livroForm.hidden = true;
+  existingCard.hidden = true;
+  addExemplarForm.hidden = true;
   document.getElementById('fontes-extra').hidden = true;
   scanInput.focus();
+});
+
+// ================= Anexar exemplares a um livro existente =================
+addExemplarForm.addEventListener('submit', async function (e) {
+  e.preventDefault();
+  if (!db) { firebaseIndisponivel(); return; }
+  const livroId = addExemplarForm.dataset.livroId;
+  const rua_id = document.getElementById('add-rua').value;
+  const prateleira_id = document.getElementById('add-prateleira').value;
+  const qtd = Math.max(1, parseInt(document.getElementById('add-qtd').value, 10) || 1);
+
+  if (!rua_id || !prateleira_id) {
+    alert('Selecione a rua e a prateleira dos novos exemplares antes de salvar.');
+    return;
+  }
+
+  const btn = addExemplarForm.querySelector('.btn-primary');
+  btn.disabled = true;
+  btn.textContent = 'Salvando…';
+  try {
+    for (let i = 0; i < qtd; i++) {
+      const codigo = await proximoCodigoExemplar();
+      await db.ref('exemplares').push({
+        livro_id: livroId,
+        codigo: codigo,
+        rua_id: rua_id,
+        prateleira_id: prateleira_id,
+        status: 'Disponível',
+        criado_em: Date.now()
+      });
+    }
+    scanStatus.textContent = qtd + ' exemplar(es) adicionado(s) ao título existente.';
+    existingCard.hidden = true;
+    addExemplarForm.hidden = true;
+    scanInput.value = '';
+    scanInput.focus();
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao salvar. Verifique a conexão e tente novamente.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Adicionar exemplar(es)';
+  }
 });
 
 // ================= Salvar livro + exemplares =================
 livroForm.addEventListener('submit', async function (e) {
   e.preventDefault();
   if (!db) { firebaseIndisponivel(); return; }
+
+  const titulo = document.getElementById('f-titulo').value.trim();
+  const autores = document.getElementById('f-autores').value.trim();
+  const editora = document.getElementById('f-editora').value.trim();
+  const categoria = document.getElementById('f-categoria').value.trim();
+  const rua_id = document.getElementById('f-rua').value;
+  const prateleira_id = document.getElementById('f-prateleira').value;
+
+  if (!titulo || !autores || !editora || !categoria) {
+    alert('Preencha título, autor(es), editora e categoria antes de salvar.');
+    return;
+  }
+  if (!rua_id || !prateleira_id) {
+    alert('Selecione a rua e a prateleira do exemplar antes de salvar.');
+    return;
+  }
+
   const dados = {
-    titulo: document.getElementById('f-titulo').value.trim(),
-    autores: document.getElementById('f-autores').value.trim(),
-    editora: document.getElementById('f-editora').value.trim(),
+    titulo: titulo,
+    autores: autores,
+    editora: editora,
     ano: document.getElementById('f-ano').value.trim(),
     isbn: document.getElementById('f-isbn').value.trim(),
     tipo: document.getElementById('f-tipo').value,
-    categoria: document.getElementById('f-categoria').value.trim(),
+    categoria: categoria,
     cdd_cdu: document.getElementById('f-cdd').value.trim(),
     eixo_tecnico: document.getElementById('f-eixo').value,
     sinopse: document.getElementById('f-sinopse').value.trim(),
     capa_url: document.getElementById('f-capa').value.trim(),
     criado_em: Date.now()
   };
-  const rua_id = document.getElementById('f-rua').value;
-  const prateleira_id = document.getElementById('f-prateleira').value;
   const qtd = Math.max(1, parseInt(document.getElementById('f-qtd').value, 10) || 1);
 
   const btn = livroForm.querySelector('.btn-primary');
