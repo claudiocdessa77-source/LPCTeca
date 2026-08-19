@@ -168,6 +168,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .card .field { margin-bottom: 12px; }
 .rua-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
 .rua-tema { display: block; font-size: 12px; color: var(--ink-soft); font-weight: 400; }
+.cor-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
+.cor-swatch {
+  width: 26px; height: 26px; border-radius: 50%; border: 2px solid transparent; cursor: pointer; padding: 0;
+}
+.cor-swatch.selecionada { border-color: var(--ink); box-shadow: 0 0 0 2px var(--card); }
+.rua-cor-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 6px; vertical-align: middle; }
 .rua-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .chip { background: var(--accent-soft); color: var(--accent); font-size: 11px; font-family: 'IBM Plex Mono', monospace; padding: 3px 8px; border-radius: 4px; }
 .chip-empty { background: var(--paper); color: var(--ink-soft); }
@@ -198,7 +204,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 .etq-barcode { width: 34mm; height: 8mm; }
 .etq-codigo { font-size: 6.5pt; font-weight: 700; line-height: 1.2; }
-.etq-endereco { font-size: 5.5pt; line-height: 1.2; }
+.etq-endereco { font-size: 5.5pt; line-height: 1.3; color: #fff; border-radius: 2mm; padding: 0.3mm 1.5mm; margin-top: 0.4mm; font-weight: 700; }
 .soon h3 { color: var(--ink-soft); }
 
 /* Ações do acervo */
@@ -393,6 +399,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <h3>Nova rua</h3>
           <div class="field"><label>Nome da rua</label><input id="rua-nome" placeholder="Rua A" /></div>
           <div class="field"><label>Tema (opcional)</label><input id="rua-tema" placeholder="Livros técnicos — RH" /></div>
+          <div class="field"><label>Cor de referência</label><div id="rua-cores" class="cor-swatches"></div></div>
           <button id="btn-add-rua" class="btn btn-primary btn-block">Adicionar rua</button>
         </div>
         <div class="card">
@@ -518,6 +525,23 @@ let ruasCache = {};
 let prateleirasCache = {};
 let livrosCache = {};
 let exemplaresCache = {};
+const PALETA_CORES = ['#C0392B', '#D9822B', '#C9A227', '#2F6B4F', '#1F7A6C', '#2E6F9E', '#3E4C9E', '#7A4FA3', '#B0428C', '#6B4A34', '#5B6470', '#22303F'];
+let corRuaSelecionada = PALETA_CORES[0];
+
+function renderCoresSwatches() {
+  const cont = document.getElementById('rua-cores');
+  cont.innerHTML = PALETA_CORES.map(function (cor) {
+    return '<button type="button" class="cor-swatch' + (cor === corRuaSelecionada ? ' selecionada' : '') + '" data-cor="' + cor + '" style="background:' + cor + '" title="' + cor + '"></button>';
+  }).join('');
+  cont.querySelectorAll('.cor-swatch').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      corRuaSelecionada = btn.dataset.cor;
+      cont.querySelectorAll('.cor-swatch').forEach(function (b) { b.classList.remove('selecionada'); });
+      btn.classList.add('selecionada');
+    });
+  });
+}
+renderCoresSwatches();
 
 // ================= Firebase =================
 // SUBSTITUA pelos dados do seu projeto Firebase (Configurações do projeto > Geral > Seus apps > Web)
@@ -642,9 +666,11 @@ document.getElementById('btn-add-rua').addEventListener('click', function () {
   if (!nome) return;
   const tema = document.getElementById('rua-tema').value.trim();
   const ordem = Object.keys(ruasCache).length;
-  db.ref('ruas').push({ nome: nome, tema: tema, ordem: ordem, criado_em: Date.now() });
+  db.ref('ruas').push({ nome: nome, tema: tema, cor: corRuaSelecionada, ordem: ordem, criado_em: Date.now() });
   document.getElementById('rua-nome').value = '';
   document.getElementById('rua-tema').value = '';
+  corRuaSelecionada = PALETA_CORES[0];
+  renderCoresSwatches();
 });
 
 document.getElementById('btn-add-prateleira').addEventListener('click', function () {
@@ -675,7 +701,7 @@ function renderRuasLista() {
       const p = e[1];
       return '<span class="chip">Prateleira ' + String(p.numero).padStart(2, '0') + (p.capacidade ? ' · até ' + p.capacidade : '') + '</span>';
     }).join('') || '<span class="chip chip-empty">sem prateleiras</span>';
-    return '<div class="rua-row"><div class="rua-nome"><strong>' + escapeHtml(r.nome) + '</strong>' +
+    return '<div class="rua-row"><div class="rua-nome"><strong><span class="rua-cor-dot" style="background:' + (r.cor || 'var(--accent)') + '"></span>' + escapeHtml(r.nome) + '</strong>' +
       (r.tema ? '<span class="rua-tema">' + escapeHtml(r.tema) + '</span>' : '') +
       '</div><div class="rua-chips">' + chips + '</div></div>';
   }).join('');
@@ -1033,9 +1059,10 @@ function renderAcervo() {
       const rua = ruasCache[ex.rua_id];
       const prat = prateleirasCache[ex.prateleira_id];
       const endereco = rua ? (rua.nome + (prat ? ' · Prateleira ' + String(prat.numero).padStart(2, '0') : '')) : 'sem endereço';
+      const corChip = rua && rua.cor ? rua.cor : '';
       return '<div class="exemplar-row">' +
         '<svg class="barcode" data-code="' + ex.codigo + '"></svg>' +
-        '<span class="endereco-chip">' + escapeHtml(endereco) + '</span>' +
+        '<span class="endereco-chip"' + (corChip ? ' style="background:' + corChip + '"' : '') + '>' + escapeHtml(endereco) + '</span>' +
         '<span class="status status-' + slug(ex.status) + '">' + escapeHtml(ex.status) + '</span>' +
         '<button class="btn-excluir-exemplar" data-id="' + exId + '" title="Excluir exemplar">✕</button>' +
         '</div>';
@@ -1266,10 +1293,11 @@ function renderFolhaEtiquetas(selecionados) {
     const rua = ruasCache[ex.rua_id];
     const prat = prateleirasCache[ex.prateleira_id];
     const endereco = rua ? (rua.nome + (prat ? ' · P' + String(prat.numero).padStart(2, '0') : '')) : '';
+    const corRua = rua && rua.cor ? rua.cor : '#2F6B4F';
     return '<div class="etq-item">' +
       '<svg class="etq-barcode" data-code="' + ex.codigo + '"></svg>' +
       '<div class="etq-codigo">' + escapeHtml(ex.codigo) + '</div>' +
-      '<div class="etq-endereco">' + escapeHtml(endereco) + '</div>' +
+      '<div class="etq-endereco" style="background:' + corRua + '">' + escapeHtml(endereco) + '</div>' +
       '</div>';
   }).join('');
 
