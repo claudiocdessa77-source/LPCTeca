@@ -175,6 +175,30 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .soon { text-align: center; padding: 60px 20px; color: var(--ink-soft); }
 .soon h3 { color: var(--ink-soft); }
 
+/* Ações do acervo */
+.livro-header { display: flex; justify-content: space-between; align-items: flex-start; gap: 10px; }
+.livro-actions { display: flex; gap: 6px; flex-shrink: 0; }
+.btn-acao {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .03em;
+  background: var(--paper); border: 1px solid var(--line); border-radius: 4px; padding: 4px 8px; cursor: pointer; color: var(--ink-soft);
+}
+.btn-acao:hover { background: var(--accent-soft); color: var(--accent); border-color: var(--accent); }
+.btn-excluir-exemplar {
+  background: none; border: none; color: var(--stamp); cursor: pointer; font-size: 13px; margin-left: 2px; padding: 0 2px; line-height: 1;
+}
+.btn-excluir-exemplar:hover { text-decoration: underline; }
+
+/* Modal de edição */
+.modal-overlay {
+  position: fixed; inset: 0; background: rgba(23,35,58,.6); z-index: 90;
+  display: flex; align-items: center; justify-content: center; padding: 20px;
+}
+.modal-overlay[hidden] { display: none; }
+.modal-card {
+  background: var(--card); border-radius: var(--radius); padding: 28px; max-width: 640px; width: 100%;
+  max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow);
+}
+
 @media (max-width: 720px) {
   .form-grid { grid-template-columns: 1fr 1fr; }
   .field-wide { grid-column: span 2; }
@@ -350,6 +374,49 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   </main>
 </div>
 
+<div id="edit-modal" class="modal-overlay" hidden>
+  <div class="modal-card">
+    <h3>Editar título</h3>
+    <div class="form-grid">
+      <div class="field"><label>Título *</label><input id="edit-titulo" /></div>
+      <div class="field"><label>Autor(es) *</label><input id="edit-autores" /></div>
+      <div class="field"><label>Editora *</label><input id="edit-editora" /></div>
+      <div class="field field-sm"><label>Ano</label><input id="edit-ano" /></div>
+      <div class="field field-sm"><label>ISBN</label><input id="edit-isbn" /></div>
+      <div class="field">
+        <label>Tipo de material *</label>
+        <select id="edit-tipo">
+          <option value="Livro">Livro</option>
+          <option value="Didático (PNLD)">Didático (PNLD)</option>
+          <option value="Revista">Revista/periódico</option>
+          <option value="Apostila">Apostila</option>
+          <option value="Mídia">Mídia (DVD/CD)</option>
+          <option value="Jogo">Jogo pedagógico</option>
+          <option value="TCC">TCC/monografia</option>
+        </select>
+      </div>
+      <div class="field"><label>Categoria/Gênero *</label><input id="edit-categoria" /></div>
+      <div class="field field-sm"><label>CDD/CDU (opcional)</label><input id="edit-cdd" /></div>
+      <div class="field">
+        <label>Eixo técnico</label>
+        <select id="edit-eixo">
+          <option value="">—</option>
+          <option>Administração</option>
+          <option>Recursos Humanos</option>
+          <option>Logística</option>
+          <option>Formação Geral</option>
+        </select>
+      </div>
+      <div class="field field-wide"><label>Sinopse</label><textarea id="edit-sinopse" rows="2"></textarea></div>
+      <div class="field field-wide"><label>URL da capa (opcional)</label><input id="edit-capa" /></div>
+    </div>
+    <div class="form-actions">
+      <button type="button" id="btn-cancelar-edicao" class="btn btn-ghost">Cancelar</button>
+      <button type="button" id="btn-salvar-edicao" class="btn btn-primary">Salvar alterações</button>
+    </div>
+  </div>
+</div>
+
 <script>
 // ================= Navegação por abas (não depende do Firebase) =================
 document.querySelectorAll('.tab').forEach(function (btn) {
@@ -363,7 +430,19 @@ document.querySelectorAll('.tab').forEach(function (btn) {
 });
 
 // ================= Senha de acesso (não depende do Firebase) =================
-const SENHA = "Lore_2001";
+const SENHA = "lpc123";
+const SENHA_ADMIN = "admin2026";
+let adminDesbloqueado = false;
+function verificarAdmin() {
+  if (adminDesbloqueado) return true;
+  const senha = prompt('Senha de administrador para editar ou excluir dados do acervo:');
+  if (senha === SENHA_ADMIN) {
+    adminDesbloqueado = true;
+    return true;
+  }
+  if (senha !== null) alert('Senha incorreta.');
+  return false;
+}
 const gate = document.getElementById('gate');
 const app = document.getElementById('app');
 document.getElementById('gate-btn').addEventListener('click', tentarEntrar);
@@ -891,7 +970,7 @@ function renderAcervo() {
     const id = entry[0], l = entry[1];
     const exemplares = Object.entries(exemplaresCache).filter(function (e) { return e[1].livro_id === id; });
     const chipsExemplares = exemplares.map(function (e) {
-      const ex = e[1];
+      const exId = e[0], ex = e[1];
       const rua = ruasCache[ex.rua_id];
       const prat = prateleirasCache[ex.prateleira_id];
       const endereco = rua ? (rua.nome + (prat ? ' · Prateleira ' + String(prat.numero).padStart(2, '0') : '')) : 'sem endereço';
@@ -899,13 +978,18 @@ function renderAcervo() {
         '<svg class="barcode" data-code="' + ex.codigo + '"></svg>' +
         '<span class="endereco-chip">' + escapeHtml(endereco) + '</span>' +
         '<span class="status status-' + slug(ex.status) + '">' + escapeHtml(ex.status) + '</span>' +
+        '<button class="btn-excluir-exemplar" data-id="' + exId + '" title="Excluir exemplar">✕</button>' +
         '</div>';
     }).join('');
 
     return '<div class="livro-card">' +
       (l.capa_url ? '<img class="livro-capa" src="' + l.capa_url + '" alt="Capa de ' + escapeHtml(l.titulo) + '" />' : '<div class="livro-capa livro-capa-vazia">sem capa</div>') +
       '<div class="livro-info">' +
-      '<h3>' + escapeHtml(l.titulo) + '</h3>' +
+      '<div class="livro-header"><h3>' + escapeHtml(l.titulo) + '</h3>' +
+      '<div class="livro-actions">' +
+      '<button class="btn-acao btn-editar-livro" data-id="' + id + '">Editar</button>' +
+      '<button class="btn-acao btn-excluir-livro" data-id="' + id + '">Excluir</button>' +
+      '</div></div>' +
       '<p class="livro-meta">' + escapeHtml([l.autores, l.editora, l.ano].filter(Boolean).join(' · ')) + '</p>' +
       '<div class="livro-exemplares">' + (chipsExemplares || '<span class="chip chip-empty">sem exemplares</span>') + '</div>' +
       '</div></div>';
@@ -916,6 +1000,113 @@ function renderAcervo() {
       JsBarcode(svg, svg.dataset.code, { format: 'CODE128', height: 30, width: 1.4, fontSize: 11, margin: 2 });
     } catch (e) { /* código inválido para o formato, ignora */ }
   });
+
+  cont.querySelectorAll('.btn-editar-livro').forEach(function (btn) {
+    btn.addEventListener('click', function () { abrirEdicaoLivro(btn.dataset.id); });
+  });
+  cont.querySelectorAll('.btn-excluir-livro').forEach(function (btn) {
+    btn.addEventListener('click', function () { excluirLivro(btn.dataset.id); });
+  });
+  cont.querySelectorAll('.btn-excluir-exemplar').forEach(function (btn) {
+    btn.addEventListener('click', function () { excluirExemplar(btn.dataset.id); });
+  });
+}
+
+// ================= Editar e excluir dados do acervo (requer senha de administrador) =================
+let editandoLivroId = null;
+
+function abrirEdicaoLivro(livroId) {
+  if (!verificarAdmin()) return;
+  const livro = livrosCache[livroId];
+  if (!livro) return;
+  editandoLivroId = livroId;
+  document.getElementById('edit-titulo').value = livro.titulo || '';
+  document.getElementById('edit-autores').value = livro.autores || '';
+  document.getElementById('edit-editora').value = livro.editora || '';
+  document.getElementById('edit-ano').value = livro.ano || '';
+  document.getElementById('edit-isbn').value = livro.isbn || '';
+  document.getElementById('edit-tipo').value = livro.tipo || 'Livro';
+  document.getElementById('edit-categoria').value = livro.categoria || '';
+  document.getElementById('edit-cdd').value = livro.cdd_cdu || '';
+  document.getElementById('edit-eixo').value = livro.eixo_tecnico || '';
+  document.getElementById('edit-sinopse').value = livro.sinopse || '';
+  document.getElementById('edit-capa').value = livro.capa_url || '';
+  document.getElementById('edit-modal').hidden = false;
+}
+
+document.getElementById('btn-cancelar-edicao').addEventListener('click', function () {
+  document.getElementById('edit-modal').hidden = true;
+  editandoLivroId = null;
+});
+
+document.getElementById('btn-salvar-edicao').addEventListener('click', async function () {
+  if (!editandoLivroId || !db) return;
+  const titulo = document.getElementById('edit-titulo').value.trim();
+  const autores = document.getElementById('edit-autores').value.trim();
+  const editora = document.getElementById('edit-editora').value.trim();
+  const categoria = document.getElementById('edit-categoria').value.trim();
+  if (!titulo || !autores || !editora || !categoria) {
+    alert('Preencha título, autor(es), editora e categoria antes de salvar.');
+    return;
+  }
+  const btnSalvar = document.getElementById('btn-salvar-edicao');
+  btnSalvar.disabled = true;
+  btnSalvar.textContent = 'Salvando…';
+  try {
+    await db.ref('livros/' + editandoLivroId).update({
+      titulo: titulo,
+      autores: autores,
+      editora: editora,
+      ano: document.getElementById('edit-ano').value.trim(),
+      isbn: document.getElementById('edit-isbn').value.trim(),
+      tipo: document.getElementById('edit-tipo').value,
+      categoria: categoria,
+      cdd_cdu: document.getElementById('edit-cdd').value.trim(),
+      eixo_tecnico: document.getElementById('edit-eixo').value,
+      sinopse: document.getElementById('edit-sinopse').value.trim(),
+      capa_url: document.getElementById('edit-capa').value.trim()
+    });
+    document.getElementById('edit-modal').hidden = true;
+    editandoLivroId = null;
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao salvar alterações.');
+  } finally {
+    btnSalvar.disabled = false;
+    btnSalvar.textContent = 'Salvar alterações';
+  }
+});
+
+async function excluirLivro(livroId) {
+  if (!verificarAdmin()) return;
+  if (!db) { firebaseIndisponivel(); return; }
+  const livro = livrosCache[livroId];
+  const titulo = livro ? livro.titulo : 'este título';
+  const qtdExemplares = Object.values(exemplaresCache).filter(function (ex) { return ex.livro_id === livroId; }).length;
+  if (!confirm('Excluir "' + titulo + '" e ' + qtdExemplares + ' exemplar(es) vinculado(s)? Essa ação não pode ser desfeita.')) return;
+  try {
+    const updates = {};
+    updates['livros/' + livroId] = null;
+    Object.entries(exemplaresCache).forEach(function (entry) {
+      if (entry[1].livro_id === livroId) updates['exemplares/' + entry[0]] = null;
+    });
+    await db.ref().update(updates);
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao excluir.');
+  }
+}
+
+async function excluirExemplar(exemplarId) {
+  if (!verificarAdmin()) return;
+  if (!db) { firebaseIndisponivel(); return; }
+  if (!confirm('Excluir este exemplar? Essa ação não pode ser desfeita.')) return;
+  try {
+    await db.ref('exemplares/' + exemplarId).remove();
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao excluir exemplar.');
+  }
 }
 
 function slug(s) {
