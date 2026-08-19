@@ -1,0 +1,723 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>LPCTeca — Biblioteca Escolar</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<style>
+:root {
+  --ink: #17233A;
+  --ink-soft: #4A5872;
+  --paper: #EAE6DA;
+  --card: #FCFBF6;
+  --accent: #2F6B4F;
+  --accent-soft: #E1EAE4;
+  --stamp: #A13D2B;
+  --stamp-soft: #F3E2DC;
+  --line: #CFC7AF;
+  --white: #FFFFFF;
+  --radius: 10px;
+  --shadow: 0 1px 2px rgba(23,35,58,.06), 0 6px 16px rgba(23,35,58,.06);
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; }
+body {
+  background: var(--paper);
+  color: var(--ink);
+  font-family: 'Inter', system-ui, sans-serif;
+  min-height: 100vh;
+}
+h1, h2, h3 { font-family: 'Fraunces', Georgia, serif; margin: 0 0 .3em; color: var(--ink); }
+code, .mono { font-family: 'IBM Plex Mono', monospace; }
+a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--accent); outline-offset: 2px;
+}
+@media (prefers-reduced-motion: reduce) {
+  * { animation: none !important; transition: none !important; }
+}
+
+/* Gate */
+.gate {
+  position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+  background: var(--ink); z-index: 100; padding: 20px;
+}
+.gate-card {
+  background: var(--card); border-radius: var(--radius); padding: 36px 32px; max-width: 360px; width: 100%;
+  text-align: center; box-shadow: var(--shadow); border: 1px solid var(--line);
+}
+.gate-stamp {
+  font-family: 'Fraunces', serif; font-weight: 700; font-size: 28px; color: var(--accent);
+  border: 2px solid var(--accent); border-radius: 6px; padding: 6px 14px; display: inline-block; transform: rotate(-2deg);
+}
+.gate-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .05em; color: var(--ink-soft); margin: 16px 0 24px; line-height: 1.6; }
+.gate-card label { display: block; text-align: left; font-size: 13px; color: var(--ink-soft); margin-bottom: 6px; }
+.gate-card input {
+  width: 100%; padding: 10px 12px; border: 1px solid var(--line); border-radius: 6px; font-size: 15px; margin-bottom: 14px;
+  font-family: inherit;
+}
+.gate-err { color: var(--stamp); font-size: 13px; margin-top: 10px; }
+
+/* App shell */
+.app { min-height: 100vh; }
+.topbar {
+  display: flex; align-items: baseline; justify-content: space-between; padding: 18px 28px;
+  border-bottom: 2px solid var(--ink); flex-wrap: wrap; gap: 6px;
+}
+.brand-mark { font-family: 'Fraunces', serif; font-weight: 700; font-size: 26px; color: var(--ink); }
+.brand-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .06em; color: var(--ink-soft); margin-left: 12px; }
+.conn { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent); }
+
+.tabs { display: flex; gap: 4px; padding: 0 24px; overflow-x: auto; }
+.tab {
+  font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: .03em; text-transform: uppercase;
+  background: var(--paper); border: 1px solid var(--line); border-bottom: none; border-radius: 8px 8px 0 0;
+  padding: 10px 16px; cursor: pointer; color: var(--ink-soft); white-space: nowrap;
+}
+.tab.active { background: var(--card); color: var(--ink); font-weight: 600; }
+.tab-soon { opacity: .55; }
+
+.content { background: var(--card); border-top: 1px solid var(--line); min-height: calc(100vh - 130px); padding: 28px; }
+.panel { display: none; max-width: 900px; margin: 0 auto; }
+.panel.active { display: block; animation: fade .25s ease; }
+@keyframes fade { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+
+/* Scan card */
+.scan-card {
+  background: var(--ink); color: var(--white); border-radius: var(--radius); padding: 28px; text-align: center;
+  background-image: repeating-linear-gradient(90deg, transparent, transparent 9px, rgba(255,255,255,.06) 9px, rgba(255,255,255,.06) 10px);
+}
+.scan-label { display: block; font-family: 'IBM Plex Mono', monospace; font-size: 12px; letter-spacing: .05em; margin-bottom: 12px; opacity: .85; }
+.scan-input {
+  width: 100%; max-width: 420px; padding: 14px 16px; font-size: 20px; font-family: 'IBM Plex Mono', monospace;
+  border-radius: 8px; border: none; text-align: center; letter-spacing: .04em;
+}
+.scan-status { margin-top: 14px; font-size: 13px; min-height: 18px; }
+
+/* Found card */
+.found-card {
+  display: flex; gap: 16px; background: var(--accent-soft); border: 1px solid var(--accent); border-radius: var(--radius);
+  padding: 16px; margin-top: 18px; align-items: flex-start;
+}
+.found-cover { width: 64px; height: 92px; object-fit: cover; border-radius: 4px; box-shadow: var(--shadow); background: var(--line); }
+.found-source { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent); text-transform: uppercase; letter-spacing: .04em; }
+.found-info h3 { font-size: 18px; margin: 4px 0 2px; }
+.found-info p { margin: 0; color: var(--ink-soft); font-size: 14px; }
+
+/* Form */
+.form { margin-top: 20px; }
+.form-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+.field { display: flex; flex-direction: column; gap: 4px; }
+.field-sm { grid-column: span 1; }
+.field-wide { grid-column: span 4; }
+.form-grid .field:not(.field-sm):not(.field-wide) { grid-column: span 2; }
+.field label { font-size: 12px; color: var(--ink-soft); font-weight: 600; }
+.field input, .field select, .field textarea {
+  padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; font-family: inherit; background: var(--white);
+}
+.form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+
+.btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px; padding: 11px 22px; border-radius: 7px; border: none; cursor: pointer; }
+.btn-primary { background: var(--accent); color: var(--white); }
+.btn-primary:disabled { opacity: .6; cursor: default; }
+.btn-ghost { background: transparent; color: var(--ink-soft); border: 1px solid var(--line); }
+.btn-block { width: 100%; margin-top: 8px; }
+
+/* Acervo */
+.panel-head { margin-bottom: 18px; }
+.search { width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; font-family: inherit; }
+.empty { color: var(--ink-soft); font-style: italic; padding: 24px 0; }
+.livro-card { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.livro-capa { width: 56px; height: 80px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
+.livro-capa-vazia { display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); font-size: 10px; text-align: center; font-family: 'IBM Plex Mono', monospace; }
+.livro-info h3 { font-size: 16px; margin-bottom: 2px; }
+.livro-meta { color: var(--ink-soft); font-size: 13px; margin: 0 0 8px; }
+.livro-exemplares { display: flex; flex-wrap: wrap; gap: 10px; }
+.exemplar-row { display: flex; align-items: center; gap: 8px; background: var(--paper); border-radius: 6px; padding: 4px 8px; }
+.barcode { height: 30px; }
+.endereco-chip {
+  background: var(--accent); color: var(--white); font-family: 'IBM Plex Mono', monospace; font-size: 10px; font-weight: 600;
+  letter-spacing: .03em; text-transform: uppercase; padding: 3px 8px; border-radius: 4px;
+}
+.status { font-size: 10px; font-weight: 600; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; }
+.status-disponível { background: var(--accent-soft); color: var(--accent); }
+.status-emprestado { background: var(--stamp-soft); color: var(--stamp); }
+
+/* Endereços */
+.enderecos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 24px; }
+.card { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.card h3 { font-size: 16px; margin-bottom: 14px; }
+.card .field { margin-bottom: 12px; }
+.rua-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.rua-tema { display: block; font-size: 12px; color: var(--ink-soft); font-weight: 400; }
+.rua-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { background: var(--accent-soft); color: var(--accent); font-size: 11px; font-family: 'IBM Plex Mono', monospace; padding: 3px 8px; border-radius: 4px; }
+.chip-empty { background: var(--paper); color: var(--ink-soft); }
+
+.soon { text-align: center; padding: 60px 20px; color: var(--ink-soft); }
+.soon h3 { color: var(--ink-soft); }
+
+@media (max-width: 720px) {
+  .form-grid { grid-template-columns: 1fr 1fr; }
+  .field-wide { grid-column: span 2; }
+  .enderecos-grid { grid-template-columns: 1fr; }
+}
+</style>
+</head>
+<body>
+
+<div id="gate" class="gate">
+  <div class="gate-card">
+    <div class="gate-stamp">LPCTeca</div>
+    <p class="gate-sub">CENTRO ESTADUAL DE EDUCAÇÃO PROFISSIONAL<br>LUIS PINTO DE CARVALHO</p>
+    <label for="gate-pass">Senha de acesso</label>
+    <input id="gate-pass" type="password" placeholder="Senha" />
+    <button id="gate-btn" class="btn btn-primary btn-block">Entrar</button>
+    <p id="gate-err" class="gate-err" hidden>Senha incorreta. Tente novamente.</p>
+  </div>
+</div>
+
+<div id="app" class="app" hidden>
+  <header class="topbar">
+    <div>
+      <span class="brand-mark">LPCTeca</span>
+      <span class="brand-sub">CEEP LUIS PINTO DE CARVALHO</span>
+    </div>
+    <div class="conn" id="conn-status">conectando…</div>
+  </header>
+
+  <nav class="tabs" id="tabs">
+    <button class="tab active" data-tab="cadastro">Cadastrar livro</button>
+    <button class="tab" data-tab="acervo">Acervo</button>
+    <button class="tab" data-tab="enderecos">Ruas e prateleiras</button>
+    <button class="tab tab-soon" data-tab="emprestimo">Empréstimo</button>
+    <button class="tab tab-soon" data-tab="devolucao">Devolução</button>
+    <button class="tab tab-soon" data-tab="dashboard">Painel</button>
+  </nav>
+
+  <main class="content">
+
+    <section id="panel-cadastro" class="panel active">
+      <div class="scan-card">
+        <label class="scan-label" for="scan-input">Escaneie o código de barras ou digite o ISBN e pressione Enter</label>
+        <input id="scan-input" class="scan-input mono" autocomplete="off" placeholder="978XXXXXXXXXX" autofocus />
+        <div id="scan-status" class="scan-status"></div>
+      </div>
+
+      <div id="found-card" class="found-card" hidden>
+        <img id="found-cover" class="found-cover" alt="Capa do livro encontrado" />
+        <div class="found-info">
+          <span id="found-source" class="found-source"></span>
+          <h3 id="found-title"></h3>
+          <p id="found-meta"></p>
+        </div>
+      </div>
+
+      <form id="livro-form" class="form" hidden novalidate>
+        <div class="form-grid">
+          <div class="field"><label>Título *</label><input id="f-titulo" required /></div>
+          <div class="field"><label>Autor(es) *</label><input id="f-autores" required /></div>
+          <div class="field"><label>Editora *</label><input id="f-editora" required /></div>
+          <div class="field field-sm"><label>Ano</label><input id="f-ano" /></div>
+          <div class="field field-sm"><label>ISBN</label><input id="f-isbn" /></div>
+          <div class="field">
+            <label>Tipo de material *</label>
+            <select id="f-tipo" required>
+              <option value="Livro">Livro</option>
+              <option value="Didático (PNLD)">Didático (PNLD)</option>
+              <option value="Revista">Revista/periódico</option>
+              <option value="Apostila">Apostila</option>
+              <option value="Mídia">Mídia (DVD/CD)</option>
+              <option value="Jogo">Jogo pedagógico</option>
+              <option value="TCC">TCC/monografia</option>
+            </select>
+          </div>
+          <div class="field"><label>Categoria/Gênero *</label><input id="f-categoria" required /></div>
+          <div class="field field-sm"><label>CDD/CDU (opcional)</label><input id="f-cdd" /></div>
+          <div class="field">
+            <label>Eixo técnico</label>
+            <select id="f-eixo">
+              <option value="">—</option>
+              <option>Administração</option>
+              <option>Recursos Humanos</option>
+              <option>Logística</option>
+              <option>Formação Geral</option>
+            </select>
+          </div>
+          <div class="field field-wide"><label>Sinopse</label><textarea id="f-sinopse" rows="2"></textarea></div>
+          <div class="field field-wide"><label>URL da capa (opcional)</label><input id="f-capa" /></div>
+          <div class="field field-sm"><label>Rua *</label><select id="f-rua" required></select></div>
+          <div class="field field-sm"><label>Prateleira *</label><select id="f-prateleira" required></select></div>
+          <div class="field field-sm"><label>Nº de exemplares *</label><input id="f-qtd" type="number" min="1" value="1" required /></div>
+        </div>
+        <div class="form-actions">
+          <button type="button" id="btn-cancelar" class="btn btn-ghost">Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar exemplar(es)</button>
+        </div>
+      </form>
+    </section>
+
+    <section id="panel-acervo" class="panel">
+      <div class="panel-head">
+        <input id="acervo-busca" class="search" placeholder="Buscar por título ou autor…" />
+      </div>
+      <div id="acervo-lista" class="acervo-lista">
+        <p class="empty">Nenhum livro cadastrado ainda. Escaneie o primeiro código de barras na aba Cadastrar livro.</p>
+      </div>
+    </section>
+
+    <section id="panel-enderecos" class="panel">
+      <div class="enderecos-grid">
+        <div class="card">
+          <h3>Nova rua</h3>
+          <div class="field"><label>Nome da rua</label><input id="rua-nome" placeholder="Rua A" /></div>
+          <div class="field"><label>Tema (opcional)</label><input id="rua-tema" placeholder="Livros técnicos — RH" /></div>
+          <button id="btn-add-rua" class="btn btn-primary btn-block">Adicionar rua</button>
+        </div>
+        <div class="card">
+          <h3>Nova prateleira</h3>
+          <div class="field"><label>Rua</label><select id="prat-rua"></select></div>
+          <div class="field"><label>Número</label><input id="prat-numero" type="number" min="1" /></div>
+          <div class="field"><label>Capacidade estimada (opcional)</label><input id="prat-cap" type="number" min="1" /></div>
+          <button id="btn-add-prateleira" class="btn btn-primary btn-block">Adicionar prateleira</button>
+        </div>
+      </div>
+      <div id="ruas-lista" class="ruas-lista"></div>
+    </section>
+
+    <section id="panel-emprestimo" class="panel">
+      <div class="soon"><h3>Empréstimo</h3><p>Módulo previsto na Fase 1 do roadmap — ainda não implementado nesta versão.</p></div>
+    </section>
+    <section id="panel-devolucao" class="panel">
+      <div class="soon"><h3>Devolução</h3><p>Módulo previsto na Fase 1 do roadmap — ainda não implementado nesta versão.</p></div>
+    </section>
+    <section id="panel-dashboard" class="panel">
+      <div class="soon"><h3>Painel gerencial</h3><p>Indicadores clicáveis com detalhamento dos registros, conforme especificação — ainda não implementado nesta versão.</p></div>
+    </section>
+
+  </main>
+</div>
+
+<script>
+// ================= Navegação por abas (não depende do Firebase) =================
+document.querySelectorAll('.tab').forEach(function (btn) {
+  btn.addEventListener('click', function () {
+    document.querySelectorAll('.tab').forEach(function (b) { b.classList.remove('active'); });
+    document.querySelectorAll('.panel').forEach(function (p) { p.classList.remove('active'); });
+    btn.classList.add('active');
+    document.getElementById('panel-' + btn.dataset.tab).classList.add('active');
+    if (btn.dataset.tab === 'cadastro') document.getElementById('scan-input').focus();
+  });
+});
+
+// ================= Senha de acesso (não depende do Firebase) =================
+const SENHA = "Lore_2001";
+const gate = document.getElementById('gate');
+const app = document.getElementById('app');
+document.getElementById('gate-btn').addEventListener('click', tentarEntrar);
+document.getElementById('gate-pass').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') tentarEntrar();
+});
+function tentarEntrar() {
+  const val = document.getElementById('gate-pass').value;
+  if (val === SENHA) {
+    gate.hidden = true;
+    app.hidden = false;
+    document.getElementById('scan-input').focus();
+  } else {
+    document.getElementById('gate-err').hidden = false;
+  }
+}
+
+// ================= Estado local =================
+let ruasCache = {};
+let prateleirasCache = {};
+let livrosCache = {};
+let exemplaresCache = {};
+
+// ================= Firebase =================
+// SUBSTITUA pelos dados do seu projeto Firebase (Configurações do projeto > Geral > Seus apps > Web)
+const firebaseConfig = {
+  apiKey: "AIzaSyAbzBmCJm2vanJpEzjWXCYAO3lgPCjyZmU",
+  authDomain: "lpcteca.firebaseapp.com",
+  databaseURL: "https://lpcteca-default-rtdb.firebaseio.com",
+  projectId: "lpcteca",
+  storageBucket: "lpcteca.firebasestorage.app",
+  messagingSenderId: "1034297597620",
+  appId: "1:1034297597620:web:921d86d451499e158241e1"
+};
+
+const connEl = document.getElementById('conn-status');
+let listenersAttached = false;
+let db = null;
+let auth = null;
+
+try {
+  firebase.initializeApp(firebaseConfig);
+  auth = firebase.auth();
+  db = firebase.database();
+
+  auth.signInAnonymously().catch(function (e) {
+    console.error('Falha na autenticação anônima', e);
+    connEl.textContent = 'erro de conexão';
+  });
+
+  auth.onAuthStateChanged(function (user) {
+    connEl.textContent = user ? 'conectado' : 'desconectado';
+    if (user && !listenersAttached) {
+      listenersAttached = true;
+      attachListeners();
+    }
+  });
+} catch (err) {
+  console.error('Firebase não inicializou — confira o firebaseConfig e acesse o sistema pela URL publicada, não como arquivo local.', err);
+  connEl.textContent = 'Firebase não configurado';
+}
+
+function firebaseIndisponivel() {
+  alert('O Firebase ainda não está configurado ou a conexão falhou. Confira o firebaseConfig no início do arquivo e acesse o sistema pela URL publicada — não abrindo o arquivo direto no navegador.');
+}
+
+function attachListeners() {
+  db.ref('ruas').on('value', function (snap) {
+    ruasCache = snap.val() || {};
+    renderRuasSelects();
+    renderRuasLista();
+    renderAcervo();
+  });
+  db.ref('prateleiras').on('value', function (snap) {
+    prateleirasCache = snap.val() || {};
+    renderRuasSelects();
+    renderRuasLista();
+    renderAcervo();
+  });
+  db.ref('livros').on('value', function (snap) {
+    livrosCache = snap.val() || {};
+    renderAcervo();
+  });
+  db.ref('exemplares').on('value', function (snap) {
+    exemplaresCache = snap.val() || {};
+    renderAcervo();
+  });
+}
+
+// ================= Ruas e Prateleiras =================
+function renderRuasSelects() {
+  const selects = [document.getElementById('f-rua'), document.getElementById('prat-rua')];
+  selects.forEach(function (sel) {
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">Selecione…</option>';
+    Object.entries(ruasCache).sort(function (a, b) { return (a[1].ordem || 0) - (b[1].ordem || 0); }).forEach(function (entry) {
+      const id = entry[0], r = entry[1];
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = r.nome;
+      sel.appendChild(opt);
+    });
+    if (atual) sel.value = atual;
+  });
+  atualizarPrateleirasDoFormulario();
+}
+
+document.getElementById('f-rua').addEventListener('change', atualizarPrateleirasDoFormulario);
+function atualizarPrateleirasDoFormulario() {
+  const ruaId = document.getElementById('f-rua').value;
+  const sel = document.getElementById('f-prateleira');
+  sel.innerHTML = '<option value="">Selecione…</option>';
+  Object.entries(prateleirasCache)
+    .filter(function (entry) { return entry[1].rua_id === ruaId; })
+    .sort(function (a, b) { return (a[1].numero || 0) - (b[1].numero || 0); })
+    .forEach(function (entry) {
+      const id = entry[0], p = entry[1];
+      const opt = document.createElement('option');
+      opt.value = id;
+      opt.textContent = 'Prateleira ' + String(p.numero).padStart(2, '0');
+      sel.appendChild(opt);
+    });
+}
+
+document.getElementById('btn-add-rua').addEventListener('click', function () {
+  if (!db) { firebaseIndisponivel(); return; }
+  const nome = document.getElementById('rua-nome').value.trim();
+  if (!nome) return;
+  const tema = document.getElementById('rua-tema').value.trim();
+  const ordem = Object.keys(ruasCache).length;
+  db.ref('ruas').push({ nome: nome, tema: tema, ordem: ordem, criado_em: Date.now() });
+  document.getElementById('rua-nome').value = '';
+  document.getElementById('rua-tema').value = '';
+});
+
+document.getElementById('btn-add-prateleira').addEventListener('click', function () {
+  if (!db) { firebaseIndisponivel(); return; }
+  const rua_id = document.getElementById('prat-rua').value;
+  const numero = parseInt(document.getElementById('prat-numero').value, 10);
+  const capValue = document.getElementById('prat-cap').value;
+  const capacidade = capValue ? parseInt(capValue, 10) : null;
+  if (!rua_id || !numero) { alert('Selecione a rua e informe o número da prateleira.'); return; }
+  db.ref('prateleiras').push({ rua_id: rua_id, numero: numero, capacidade: capacidade, criado_em: Date.now() });
+  document.getElementById('prat-numero').value = '';
+  document.getElementById('prat-cap').value = '';
+});
+
+function renderRuasLista() {
+  const cont = document.getElementById('ruas-lista');
+  const ruasOrdenadas = Object.entries(ruasCache).sort(function (a, b) { return (a[1].ordem || 0) - (b[1].ordem || 0); });
+  if (ruasOrdenadas.length === 0) {
+    cont.innerHTML = '<p class="empty">Nenhuma rua cadastrada ainda.</p>';
+    return;
+  }
+  cont.innerHTML = ruasOrdenadas.map(function (entry) {
+    const id = entry[0], r = entry[1];
+    const prats = Object.entries(prateleirasCache)
+      .filter(function (e) { return e[1].rua_id === id; })
+      .sort(function (a, b) { return (a[1].numero || 0) - (b[1].numero || 0); });
+    const chips = prats.map(function (e) {
+      const p = e[1];
+      return '<span class="chip">Prateleira ' + String(p.numero).padStart(2, '0') + (p.capacidade ? ' · até ' + p.capacidade : '') + '</span>';
+    }).join('') || '<span class="chip chip-empty">sem prateleiras</span>';
+    return '<div class="rua-row"><div class="rua-nome"><strong>' + escapeHtml(r.nome) + '</strong>' +
+      (r.tema ? '<span class="rua-tema">' + escapeHtml(r.tema) + '</span>' : '') +
+      '</div><div class="rua-chips">' + chips + '</div></div>';
+  }).join('');
+}
+
+function escapeHtml(s) {
+  return String(s == null ? '' : s).replace(/[&<>"']/g, function (c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
+}
+
+// ================= Busca do livro por ISBN =================
+const scanInput = document.getElementById('scan-input');
+const scanStatus = document.getElementById('scan-status');
+const foundCard = document.getElementById('found-card');
+const livroForm = document.getElementById('livro-form');
+let buscaEmAndamento = false;
+
+scanInput.addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    iniciarBusca(scanInput.value);
+  }
+});
+
+async function iniciarBusca(valor) {
+  const isbn = (valor || '').replace(/[^0-9Xx]/g, '');
+  if (!isbn || buscaEmAndamento) return;
+  buscaEmAndamento = true;
+  scanStatus.textContent = 'Buscando nas bases de dados…';
+  foundCard.hidden = true;
+  livroForm.hidden = true;
+
+  const resultado = await buscarLivroPorISBN(isbn);
+
+  if (resultado) {
+    scanStatus.textContent = 'Dados encontrados via ' + resultado.fonte + '. Revise antes de salvar.';
+    preencherFormulario(resultado, isbn);
+    mostrarCardEncontrado(resultado);
+  } else {
+    scanStatus.textContent = 'Nenhum resultado encontrado no Google Books nem no Open Library. Preencha os dados manualmente.';
+    limparFormulario();
+    document.getElementById('f-isbn').value = isbn;
+    livroForm.hidden = false;
+    document.getElementById('f-titulo').focus();
+  }
+  buscaEmAndamento = false;
+}
+
+async function buscarLivroPorISBN(isbn) {
+  try {
+    const res = await fetch('https://www.googleapis.com/books/v1/volumes?q=isbn:' + isbn);
+    const data = await res.json();
+    if (data.totalItems > 0 && data.items && data.items[0]) {
+      const info = data.items[0].volumeInfo || {};
+      return {
+        fonte: 'Google Books',
+        titulo: info.title || '',
+        autores: (info.authors || []).join(', '),
+        editora: info.publisher || '',
+        ano: info.publishedDate ? info.publishedDate.slice(0, 4) : '',
+        sinopse: info.description || '',
+        capa_url: info.imageLinks ? (info.imageLinks.thumbnail || info.imageLinks.smallThumbnail || '') : '',
+        categoria: (info.categories && info.categories[0]) || ''
+      };
+    }
+  } catch (e) { console.warn('Google Books indisponível', e); }
+
+  try {
+    const res2 = await fetch('https://openlibrary.org/api/books?bibkeys=ISBN:' + isbn + '&format=json&jscmd=data');
+    const data2 = await res2.json();
+    const info = data2['ISBN:' + isbn];
+    if (info) {
+      return {
+        fonte: 'Open Library',
+        titulo: info.title || '',
+        autores: (info.authors || []).map(function (a) { return a.name; }).join(', '),
+        editora: (info.publishers && info.publishers[0] && info.publishers[0].name) || '',
+        ano: info.publish_date || '',
+        sinopse: info.notes ? (typeof info.notes === 'string' ? info.notes : info.notes.value) : '',
+        capa_url: info.cover ? (info.cover.large || info.cover.medium || '') : '',
+        categoria: (info.subjects && info.subjects[0] && info.subjects[0].name) || ''
+      };
+    }
+  } catch (e) { console.warn('Open Library indisponível', e); }
+
+  return null;
+}
+
+function mostrarCardEncontrado(r) {
+  document.getElementById('found-source').textContent = 'Encontrado via ' + r.fonte;
+  document.getElementById('found-title').textContent = r.titulo || '(sem título)';
+  document.getElementById('found-meta').textContent = [r.autores, r.editora, r.ano].filter(Boolean).join(' · ');
+  const cover = document.getElementById('found-cover');
+  if (r.capa_url) { cover.src = r.capa_url; cover.style.display = ''; } else { cover.style.display = 'none'; }
+  foundCard.hidden = false;
+}
+
+function preencherFormulario(r, isbn) {
+  document.getElementById('f-titulo').value = r.titulo || '';
+  document.getElementById('f-autores').value = r.autores || '';
+  document.getElementById('f-editora').value = r.editora || '';
+  document.getElementById('f-ano').value = r.ano || '';
+  document.getElementById('f-isbn').value = isbn || '';
+  document.getElementById('f-categoria').value = r.categoria || '';
+  document.getElementById('f-sinopse').value = r.sinopse || '';
+  document.getElementById('f-capa').value = r.capa_url || '';
+  livroForm.hidden = false;
+}
+
+function limparFormulario() {
+  livroForm.reset();
+}
+
+document.getElementById('btn-cancelar').addEventListener('click', function () {
+  livroForm.hidden = true;
+  foundCard.hidden = true;
+  scanStatus.textContent = '';
+  scanInput.value = '';
+  scanInput.focus();
+});
+
+// ================= Salvar livro + exemplares =================
+livroForm.addEventListener('submit', async function (e) {
+  e.preventDefault();
+  if (!db) { firebaseIndisponivel(); return; }
+  const dados = {
+    titulo: document.getElementById('f-titulo').value.trim(),
+    autores: document.getElementById('f-autores').value.trim(),
+    editora: document.getElementById('f-editora').value.trim(),
+    ano: document.getElementById('f-ano').value.trim(),
+    isbn: document.getElementById('f-isbn').value.trim(),
+    tipo: document.getElementById('f-tipo').value,
+    categoria: document.getElementById('f-categoria').value.trim(),
+    cdd_cdu: document.getElementById('f-cdd').value.trim(),
+    eixo_tecnico: document.getElementById('f-eixo').value,
+    sinopse: document.getElementById('f-sinopse').value.trim(),
+    capa_url: document.getElementById('f-capa').value.trim(),
+    criado_em: Date.now()
+  };
+  const rua_id = document.getElementById('f-rua').value;
+  const prateleira_id = document.getElementById('f-prateleira').value;
+  const qtd = Math.max(1, parseInt(document.getElementById('f-qtd').value, 10) || 1);
+
+  const btn = livroForm.querySelector('.btn-primary');
+  btn.disabled = true;
+  btn.textContent = 'Salvando…';
+
+  try {
+    const livroRef = await db.ref('livros').push(dados);
+    const livroId = livroRef.key;
+
+    for (let i = 0; i < qtd; i++) {
+      const codigo = await proximoCodigoExemplar();
+      await db.ref('exemplares').push({
+        livro_id: livroId,
+        codigo: codigo,
+        rua_id: rua_id,
+        prateleira_id: prateleira_id,
+        status: 'Disponível',
+        criado_em: Date.now()
+      });
+    }
+
+    scanStatus.textContent = qtd + ' exemplar(es) salvo(s) com sucesso.';
+    livroForm.hidden = true;
+    foundCard.hidden = true;
+    scanInput.value = '';
+    scanInput.focus();
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao salvar. Verifique a conexão e tente novamente.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Salvar exemplar(es)';
+  }
+});
+
+function proximoCodigoExemplar() {
+  return db.ref('contadores/exemplar').transaction(function (atual) { return (atual || 0) + 1; }).then(function (res) {
+    const n = res.snapshot.val();
+    return 'LPC' + String(n).padStart(6, '0');
+  });
+}
+
+// ================= Acervo: listagem =================
+document.getElementById('acervo-busca').addEventListener('input', renderAcervo);
+
+function renderAcervo() {
+  const cont = document.getElementById('acervo-lista');
+  const termo = document.getElementById('acervo-busca').value.trim().toLowerCase();
+  const livrosOrdenados = Object.entries(livrosCache).sort(function (a, b) { return (b[1].criado_em || 0) - (a[1].criado_em || 0); });
+  const filtrados = livrosOrdenados.filter(function (entry) {
+    if (!termo) return true;
+    const l = entry[1];
+    return (l.titulo || '').toLowerCase().includes(termo) || (l.autores || '').toLowerCase().includes(termo);
+  });
+
+  if (filtrados.length === 0) {
+    cont.innerHTML = '<p class="empty">Nenhum livro cadastrado ainda. Escaneie o primeiro código de barras na aba Cadastrar livro.</p>';
+    return;
+  }
+
+  cont.innerHTML = filtrados.map(function (entry) {
+    const id = entry[0], l = entry[1];
+    const exemplares = Object.entries(exemplaresCache).filter(function (e) { return e[1].livro_id === id; });
+    const chipsExemplares = exemplares.map(function (e) {
+      const ex = e[1];
+      const rua = ruasCache[ex.rua_id];
+      const prat = prateleirasCache[ex.prateleira_id];
+      const endereco = rua ? (rua.nome + (prat ? ' · Prateleira ' + String(prat.numero).padStart(2, '0') : '')) : 'sem endereço';
+      return '<div class="exemplar-row">' +
+        '<svg class="barcode" data-code="' + ex.codigo + '"></svg>' +
+        '<span class="endereco-chip">' + escapeHtml(endereco) + '</span>' +
+        '<span class="status status-' + slug(ex.status) + '">' + escapeHtml(ex.status) + '</span>' +
+        '</div>';
+    }).join('');
+
+    return '<div class="livro-card">' +
+      (l.capa_url ? '<img class="livro-capa" src="' + l.capa_url + '" alt="Capa de ' + escapeHtml(l.titulo) + '" />' : '<div class="livro-capa livro-capa-vazia">sem capa</div>') +
+      '<div class="livro-info">' +
+      '<h3>' + escapeHtml(l.titulo) + '</h3>' +
+      '<p class="livro-meta">' + escapeHtml([l.autores, l.editora, l.ano].filter(Boolean).join(' · ')) + '</p>' +
+      '<div class="livro-exemplares">' + (chipsExemplares || '<span class="chip chip-empty">sem exemplares</span>') + '</div>' +
+      '</div></div>';
+  }).join('');
+
+  cont.querySelectorAll('.barcode').forEach(function (svg) {
+    try {
+      JsBarcode(svg, svg.dataset.code, { format: 'CODE128', height: 30, width: 1.4, fontSize: 11, margin: 2 });
+    } catch (e) { /* código inválido para o formato, ignora */ }
+  });
+}
+
+function slug(s) {
+  return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
+}
+</script>
+</body>
+</html>
