@@ -192,8 +192,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 #etq-folha { display: none; }
 @media print {
-  body * { visibility: hidden; }
-  #etq-folha, #etq-folha * { visibility: visible; }
+  body * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+  #etq-folha, #etq-folha * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   #etq-folha { display: grid; position: absolute; top: 0; left: 0; grid-template-columns: repeat(5, 38.1mm); grid-auto-rows: 21.2mm; }
   @page { margin: 0; size: A4; }
 }
