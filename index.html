@@ -184,10 +184,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .etq-row { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 12px; }
 .etq-contagem { font-family: 'IBM Plex Mono', monospace; font-size: 12px; color: var(--ink-soft); align-self: center; }
 .etq-ajuda { font-size: 12px; color: var(--ink-soft); margin: 0 0 14px; }
-.etq-lista { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; }
+.etq-lista { max-height: 340px; overflow-y: auto; border: 1px solid var(--line); border-radius: 8px; margin-top: 12px; }
 .etq-linha { display: flex; align-items: center; gap: 10px; padding: 8px 12px; border-bottom: 1px solid var(--line); font-size: 13px; }
 .etq-linha:last-child { border-bottom: none; }
-.etq-linha-impressa { opacity: .55; }
 .etq-linha span:nth-child(3) { flex: 1; }
 
 #etq-folha { display: none; }
@@ -389,6 +388,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <button type="button" id="btn-imprimir-etiquetas" class="btn btn-primary">Imprimir etiquetas</button>
       </div>
       <p class="etq-ajuda">Formato Pimaco A4251 (38,1 × 21,2mm, 65 por folha — 5 colunas × 13 linhas). Antes de colar nos livros, imprima uma folha de teste em papel comum, sobreponha à etiqueta real contra a luz e ajuste as margens acima se precisar.</p>
+      <input id="etq-busca" class="search" placeholder="Buscar por título, autor ou código do exemplar…" />
       <div id="etq-lista" class="etq-lista"></div>
       <div id="etq-folha"></div>
     </section>
@@ -1236,21 +1236,29 @@ async function excluirExemplar(exemplarId) {
 // ================= Impressão de etiquetas =================
 function renderListaEtiquetas() {
   const cont = document.getElementById('etq-lista');
+  const termo = document.getElementById('etq-busca').value.trim().toLowerCase();
   const entradas = Object.entries(exemplaresCache).sort(function (a, b) { return (a[1].criado_em || 0) - (b[1].criado_em || 0); });
-  if (entradas.length === 0) {
-    cont.innerHTML = '<p class="empty">Nenhum exemplar cadastrado ainda.</p>';
+  const filtradas = entradas.filter(function (entry) {
+    if (!termo) return true;
+    const ex = entry[1];
+    const livro = livrosCache[ex.livro_id];
+    const titulo = livro ? livro.titulo : '';
+    const autores = livro ? livro.autores : '';
+    return (ex.codigo || '').toLowerCase().includes(termo) || (titulo || '').toLowerCase().includes(termo) || (autores || '').toLowerCase().includes(termo);
+  });
+  if (filtradas.length === 0) {
+    cont.innerHTML = '<p class="empty">' + (entradas.length === 0 ? 'Nenhum exemplar cadastrado ainda.' : 'Nenhum exemplar encontrado para essa busca.') + '</p>';
+    atualizarContagemEtiquetas();
     return;
   }
-  cont.innerHTML = entradas.map(function (entry) {
+  cont.innerHTML = filtradas.map(function (entry) {
     const exId = entry[0], ex = entry[1];
     const livro = livrosCache[ex.livro_id];
     const titulo = livro ? livro.titulo : '(título desconhecido)';
-    const jaImpressa = !!ex.etiqueta_impressa;
-    return '<label class="etq-linha' + (jaImpressa ? ' etq-linha-impressa' : '') + '">' +
-      '<input type="checkbox" class="etq-check" value="' + exId + '"' + (jaImpressa ? '' : ' checked') + ' />' +
+    return '<label class="etq-linha">' +
+      '<input type="checkbox" class="etq-check" value="' + exId + '"' + (ex.etiqueta_impressa ? '' : ' checked') + ' />' +
       '<span class="mono">' + escapeHtml(ex.codigo) + '</span>' +
       '<span>' + escapeHtml(titulo) + '</span>' +
-      (jaImpressa ? '<span class="chip chip-empty">já impressa</span>' : '') +
       '</label>';
   }).join('');
   cont.querySelectorAll('.etq-check').forEach(function (chk) {
@@ -1258,6 +1266,8 @@ function renderListaEtiquetas() {
   });
   atualizarContagemEtiquetas();
 }
+
+document.getElementById('etq-busca').addEventListener('input', renderListaEtiquetas);
 
 function atualizarContagemEtiquetas() {
   const n = document.querySelectorAll('.etq-check:checked').length;
