@@ -10,6 +10,7 @@
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-database-compat.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/jsbarcode@3.11.5/dist/JsBarcode.all.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
 <style>
 :root {
   --ink: #17233A;
@@ -105,6 +106,31 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 .btn-clear:hover { background: rgba(255,255,255,.24); }
 .scan-status { margin-top: 14px; font-size: 13px; min-height: 18px; }
+
+/* Importação por planilha */
+.import-divisor { text-align: center; color: var(--ink-soft); font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .05em; margin: 18px 0; position: relative; }
+.import-divisor::before, .import-divisor::after { content: ''; position: absolute; top: 50%; width: 38%; border-top: 1px solid var(--line); }
+.import-divisor::before { left: 0; }
+.import-divisor::after { right: 0; }
+.import-card { background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 20px; }
+.import-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; flex-wrap: wrap; gap: 10px; }
+.import-title { font-weight: 600; font-size: 14px; }
+.btn-modelo {
+  display: inline-flex; align-items: center; gap: 8px; background: var(--paper); border: 1px solid var(--line);
+  border-radius: 6px; padding: 7px 12px; cursor: pointer; font-size: 12px; color: var(--ink); font-family: 'Inter', sans-serif;
+}
+.btn-modelo:hover { background: var(--accent-soft); border-color: var(--accent); }
+.icone-xlsx {
+  display: inline-flex; align-items: center; justify-content: center; background: #1D6F42; color: #fff;
+  font-family: 'IBM Plex Mono', monospace; font-weight: 700; font-size: 9px; padding: 3px 5px; border-radius: 3px; letter-spacing: .02em;
+}
+.dropzone {
+  border: 2px dashed var(--line); border-radius: 8px; padding: 26px; text-align: center; cursor: pointer;
+  color: var(--ink-soft); font-size: 13px; transition: background .15s, border-color .15s;
+}
+.dropzone:hover, .dropzone-ativa { background: var(--accent-soft); border-color: var(--accent); }
+.dropzone-link { color: var(--accent); font-weight: 600; text-decoration: underline; }
+.import-status { margin-top: 12px; font-size: 12px; color: var(--ink-soft); white-space: pre-line; }
 
 /* Found card */
 .found-card {
@@ -280,6 +306,23 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <button type="button" id="btn-limpar-scan" class="btn-clear" title="Limpar campo">✕</button>
         </div>
         <div id="scan-status" class="scan-status"></div>
+      </div>
+
+      <div class="import-divisor">OU IMPORTAR POR PLANILHA</div>
+
+      <div class="import-card">
+        <div class="import-header">
+          <span class="import-title">Cadastrar vários livros de uma vez</span>
+          <button type="button" id="btn-baixar-modelo" class="btn-modelo">
+            <span class="icone-xlsx">XLSX</span> Baixar modelo
+          </button>
+        </div>
+        <div id="dropzone" class="dropzone">
+          Arraste o arquivo .xlsx aqui, ou <span class="dropzone-link">clique para selecionar</span>
+          <input type="file" id="import-file" accept=".xlsx,.xls" hidden />
+        </div>
+        <p class="etq-ajuda">Campos com * são obrigatórios. Rua e Prateleira devem corresponder exatamente a uma já cadastrada em "Ruas e prateleiras".</p>
+        <div id="import-status" class="import-status"></div>
       </div>
 
       <div id="found-card" class="found-card" hidden>
@@ -1031,6 +1074,131 @@ function proximoCodigoExemplar() {
     const n = res.snapshot.val();
     return 'LPC' + String(n).padStart(6, '0');
   });
+}
+
+// ================= Importação por planilha =================
+document.getElementById('btn-baixar-modelo').addEventListener('click', function () {
+  const cabecalho = ['Título*', 'Autor(es)*', 'Editora*', 'Ano', 'ISBN', 'Tipo de material*', 'Categoria/Gênero*', 'CDD/CDU', 'Eixo técnico', 'Sinopse', 'Rua*', 'Prateleira*', 'Quantidade de exemplares*'];
+  const exemplo = ['Grande Sertão: Veredas', 'João Guimarães Rosa', 'Editora Nova Fronteira', '2001', '9788520912096', 'Livro', 'Literatura', '', 'Formação Geral', 'Romance de João Guimarães Rosa que narra a vida do jagunço Riobaldo.', 'A', 1, 2];
+  const ws = XLSX.utils.aoa_to_sheet([cabecalho, exemplo]);
+  ws['!cols'] = cabecalho.map(function () { return { wch: 22 }; });
+  const wb = XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb, ws, 'Livros');
+  XLSX.writeFile(wb, 'modelo_cadastro_livros_lpcteca.xlsx');
+});
+
+const dropzone = document.getElementById('dropzone');
+const importFile = document.getElementById('import-file');
+const importStatus = document.getElementById('import-status');
+
+dropzone.addEventListener('click', function () { importFile.click(); });
+dropzone.addEventListener('dragover', function (e) { e.preventDefault(); dropzone.classList.add('dropzone-ativa'); });
+dropzone.addEventListener('dragleave', function () { dropzone.classList.remove('dropzone-ativa'); });
+dropzone.addEventListener('drop', function (e) {
+  e.preventDefault();
+  dropzone.classList.remove('dropzone-ativa');
+  if (e.dataTransfer.files && e.dataTransfer.files[0]) processarPlanilha(e.dataTransfer.files[0]);
+});
+importFile.addEventListener('change', function () {
+  if (importFile.files && importFile.files[0]) processarPlanilha(importFile.files[0]);
+  importFile.value = '';
+});
+
+async function processarPlanilha(file) {
+  if (!db) { firebaseIndisponivel(); return; }
+  importStatus.textContent = 'Lendo planilha…';
+  let linhas;
+  try {
+    const dadosArquivo = await file.arrayBuffer();
+    const wb = XLSX.read(dadosArquivo, { type: 'array' });
+    const ws = wb.Sheets[wb.SheetNames[0]];
+    linhas = XLSX.utils.sheet_to_json(ws, { defval: '' });
+  } catch (err) {
+    console.error(err);
+    importStatus.textContent = 'Erro ao ler a planilha. Confirme que é um arquivo .xlsx válido.';
+    return;
+  }
+
+  if (linhas.length === 0) {
+    importStatus.textContent = 'A planilha está vazia.';
+    return;
+  }
+
+  const mapaRuas = {};
+  Object.entries(ruasCache).forEach(function (entry) {
+    mapaRuas[(entry[1].nome || '').trim().toLowerCase()] = entry[0];
+  });
+
+  importStatus.textContent = 'Importando 0 de ' + linhas.length + '…';
+  let sucesso = 0;
+  const erros = [];
+
+  for (let i = 0; i < linhas.length; i++) {
+    const linha = linhas[i];
+    const numeroLinha = i + 2;
+    importStatus.textContent = 'Importando ' + (i + 1) + ' de ' + linhas.length + '…';
+
+    const titulo = String(linha['Título*'] || linha['Título'] || linha['Titulo'] || '').trim();
+    const autores = String(linha['Autor(es)*'] || linha['Autor(es)'] || linha['Autores'] || '').trim();
+    const editora = String(linha['Editora*'] || linha['Editora'] || '').trim();
+    const categoria = String(linha['Categoria/Gênero*'] || linha['Categoria/Gênero'] || linha['Categoria'] || '').trim();
+    const nomeRua = String(linha['Rua*'] || linha['Rua'] || '').trim();
+    const numeroPrateleira = parseInt(linha['Prateleira*'] || linha['Prateleira'], 10);
+    const qtd = Math.max(1, parseInt(linha['Quantidade de exemplares*'] || linha['Quantidade de exemplares'] || linha['Quantidade'], 10) || 1);
+
+    if (!titulo || !autores || !editora || !categoria) {
+      erros.push('Linha ' + numeroLinha + ': faltam título, autor, editora ou categoria.');
+      continue;
+    }
+    const rua_id = mapaRuas[nomeRua.toLowerCase()];
+    if (!nomeRua || !rua_id) {
+      erros.push('Linha ' + numeroLinha + ': rua "' + nomeRua + '" não encontrada — cadastre-a antes em Ruas e prateleiras.');
+      continue;
+    }
+    const prateleiraEntry = Object.entries(prateleirasCache).find(function (e) {
+      return e[1].rua_id === rua_id && e[1].numero === numeroPrateleira;
+    });
+    if (!numeroPrateleira || !prateleiraEntry) {
+      erros.push('Linha ' + numeroLinha + ': prateleira ' + (linha['Prateleira*'] || linha['Prateleira'] || '') + ' não encontrada na rua "' + nomeRua + '".');
+      continue;
+    }
+
+    try {
+      const livroRef = await db.ref('livros').push({
+        titulo: titulo,
+        autores: autores,
+        editora: editora,
+        ano: String(linha['Ano'] || '').trim(),
+        isbn: String(linha['ISBN'] || '').trim(),
+        tipo: String(linha['Tipo de material*'] || linha['Tipo de material'] || 'Livro').trim() || 'Livro',
+        categoria: categoria,
+        cdd_cdu: String(linha['CDD/CDU'] || '').trim(),
+        eixo_tecnico: String(linha['Eixo técnico'] || '').trim(),
+        sinopse: String(linha['Sinopse'] || '').trim(),
+        capa_url: '',
+        criado_em: Date.now()
+      });
+      const livroId = livroRef.key;
+      for (let n = 0; n < qtd; n++) {
+        const codigo = await proximoCodigoExemplar();
+        await db.ref('exemplares').push({
+          livro_id: livroId,
+          codigo: codigo,
+          rua_id: rua_id,
+          prateleira_id: prateleiraEntry[0],
+          status: 'Disponível',
+          criado_em: Date.now()
+        });
+      }
+      sucesso++;
+    } catch (err) {
+      erros.push('Linha ' + numeroLinha + ': erro ao salvar — ' + err.message);
+    }
+  }
+
+  let resumo = sucesso + ' de ' + linhas.length + ' título(s) importado(s) com sucesso.';
+  if (erros.length > 0) resumo += '\n\n' + erros.join('\n');
+  importStatus.textContent = resumo;
 }
 
 // ================= Acervo: listagem =================
