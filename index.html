@@ -290,6 +290,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   max-height: 90vh; overflow-y: auto; box-shadow: var(--shadow);
 }
 .modal-divider { border: none; border-top: 1px solid var(--line); margin: 24px 0; }
+.edit-exemplar-mover-todos { display: flex; gap: 8px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+.edit-exemplar-mover-todos select {
+  padding: 7px 9px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-family: inherit; background: var(--white);
+}
+.edit-exemplar-row { display: flex; align-items: center; gap: 8px; padding: 8px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; transition: background .3s; }
+.edit-exemplar-row:last-child { border-bottom: none; }
+.edit-exemplar-row select {
+  padding: 6px 8px; border: 1px solid var(--line); border-radius: 6px; font-size: 12px; font-family: inherit; background: var(--white);
+}
+.edit-ex-codigo { width: 92px; flex-shrink: 0; font-size: 12px; }
+.edit-exemplar-movido { background: var(--accent-soft); }
 
 @media (max-width: 720px) {
   .form-grid { grid-template-columns: 1fr 1fr; }
@@ -588,6 +599,17 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <div class="form-actions">
       <button type="button" id="btn-adicionar-exemplares-edicao" class="btn btn-primary">Adicionar exemplar(es)</button>
     </div>
+
+    <hr class="modal-divider" />
+
+    <h3>Exemplares deste título</h3>
+    <div class="edit-exemplar-mover-todos">
+      <span class="mono" style="font-size:11px;color:var(--ink-soft);">Mover todos para:</span>
+      <select id="edit-mover-todos-rua"><option value="">Rua…</option></select>
+      <select id="edit-mover-todos-prateleira"><option value="">Prateleira…</option></select>
+      <button type="button" id="btn-mover-todos-exemplares" class="btn btn-ghost">Aplicar a todos</button>
+    </div>
+    <div id="edit-exemplares-lista"></div>
   </div>
 </div>
 
@@ -724,7 +746,7 @@ function attachListeners() {
 
 // ================= Ruas e Prateleiras =================
 function renderRuasSelects() {
-  [document.getElementById('f-rua'), document.getElementById('prat-rua'), document.getElementById('add-rua'), document.getElementById('edit-add-rua')].forEach(function (sel) {
+  [document.getElementById('f-rua'), document.getElementById('prat-rua'), document.getElementById('add-rua'), document.getElementById('edit-add-rua'), document.getElementById('edit-mover-todos-rua')].forEach(function (sel) {
     const atual = sel.value;
     sel.innerHTML = '<option value="">Selecione…</option>';
     Object.entries(ruasCache).sort(function (a, b) { return (a[1].ordem || 0) - (b[1].ordem || 0); }).forEach(function (entry) {
@@ -739,6 +761,12 @@ function renderRuasSelects() {
   atualizarPrateleirasDoFormulario();
   atualizarPrateleirasDoFormularioAdd();
   atualizarPrateleirasDoFormularioEdicao();
+  atualizarPrateleirasMoverTodos();
+}
+
+document.getElementById('edit-mover-todos-rua').addEventListener('change', atualizarPrateleirasMoverTodos);
+function atualizarPrateleirasMoverTodos() {
+  popularPrateleiras('edit-mover-todos-rua', 'edit-mover-todos-prateleira');
 }
 
 function popularPrateleiras(ruaSelId, prateleiraSelId) {
@@ -1388,9 +1416,96 @@ function abrirEdicaoLivro(livroId) {
   document.getElementById('edit-sinopse').value = livro.sinopse || '';
   document.getElementById('edit-capa').value = livro.capa_url || '';
   document.getElementById('edit-add-qtd').value = 1;
+  document.getElementById('edit-mover-todos-rua').value = '';
   renderRuasSelects();
+  renderExemplaresDoLivroEdicao(livroId);
   document.getElementById('edit-modal').hidden = false;
 }
+
+function popularPrateleirasEmSelect(ruaId, selectEl) {
+  const atual = selectEl.value;
+  selectEl.innerHTML = '<option value="">Prateleira…</option>';
+  Object.entries(prateleirasCache)
+    .filter(function (e) { return e[1].rua_id === ruaId; })
+    .sort(function (a, b) { return (a[1].numero || 0) - (b[1].numero || 0); })
+    .forEach(function (e) {
+      const opt = document.createElement('option');
+      opt.value = e[0];
+      opt.textContent = 'Prateleira ' + String(e[1].numero).padStart(2, '0');
+      selectEl.appendChild(opt);
+    });
+  if (atual) selectEl.value = atual;
+}
+
+function renderExemplaresDoLivroEdicao(livroId) {
+  const cont = document.getElementById('edit-exemplares-lista');
+  const exemplares = Object.entries(exemplaresCache).filter(function (e) { return e[1].livro_id === livroId; });
+  if (exemplares.length === 0) {
+    cont.innerHTML = '<p class="empty">Nenhum exemplar para este título.</p>';
+    return;
+  }
+  const opcoesRuas = Object.entries(ruasCache).sort(function (a, b) { return (a[1].ordem || 0) - (b[1].ordem || 0); })
+    .map(function (e) { return '<option value="' + e[0] + '">' + escapeHtml(e[1].nome) + '</option>'; }).join('');
+
+  cont.innerHTML = exemplares.map(function (entry) {
+    const exId = entry[0], ex = entry[1];
+    return '<div class="edit-exemplar-row" data-exid="' + exId + '">' +
+      '<span class="mono edit-ex-codigo">' + escapeHtml(ex.codigo) + '</span>' +
+      '<select class="edit-ex-rua"><option value="">Rua…</option>' + opcoesRuas + '</select>' +
+      '<select class="edit-ex-prateleira"><option value="">Prateleira…</option></select>' +
+      '<button type="button" class="btn-acao btn-mover-exemplar">Mover</button>' +
+      '</div>';
+  }).join('');
+
+  cont.querySelectorAll('.edit-exemplar-row').forEach(function (row) {
+    const exId = row.dataset.exid;
+    const ex = exemplaresCache[exId];
+    const selRua = row.querySelector('.edit-ex-rua');
+    const selPrat = row.querySelector('.edit-ex-prateleira');
+    selRua.value = ex.rua_id || '';
+    popularPrateleirasEmSelect(selRua.value, selPrat);
+    selPrat.value = ex.prateleira_id || '';
+    selRua.addEventListener('change', function () {
+      popularPrateleirasEmSelect(selRua.value, selPrat);
+    });
+    row.querySelector('.btn-mover-exemplar').addEventListener('click', async function () {
+      if (!db) { firebaseIndisponivel(); return; }
+      const novaRua = selRua.value;
+      const novaPrateleira = selPrat.value;
+      if (!novaRua || !novaPrateleira) { alert('Selecione a rua e a prateleira de destino.'); return; }
+      try {
+        await db.ref('exemplares/' + exId).update({ rua_id: novaRua, prateleira_id: novaPrateleira });
+        row.classList.add('edit-exemplar-movido');
+        setTimeout(function () { row.classList.remove('edit-exemplar-movido'); }, 1200);
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao mover exemplar.');
+      }
+    });
+  });
+}
+
+document.getElementById('btn-mover-todos-exemplares').addEventListener('click', async function () {
+  if (!db) { firebaseIndisponivel(); return; }
+  if (!editandoLivroId) return;
+  const novaRua = document.getElementById('edit-mover-todos-rua').value;
+  const novaPrateleira = document.getElementById('edit-mover-todos-prateleira').value;
+  if (!novaRua || !novaPrateleira) { alert('Selecione a rua e a prateleira de destino.'); return; }
+  const exemplares = Object.entries(exemplaresCache).filter(function (e) { return e[1].livro_id === editandoLivroId; });
+  if (exemplares.length === 0) return;
+  const updates = {};
+  exemplares.forEach(function (e) {
+    updates['exemplares/' + e[0] + '/rua_id'] = novaRua;
+    updates['exemplares/' + e[0] + '/prateleira_id'] = novaPrateleira;
+  });
+  try {
+    await db.ref().update(updates);
+    renderExemplaresDoLivroEdicao(editandoLivroId);
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao mover exemplares.');
+  }
+});
 
 document.getElementById('btn-cancelar-edicao').addEventListener('click', function () {
   document.getElementById('edit-modal').hidden = true;
@@ -1461,6 +1576,7 @@ document.getElementById('btn-adicionar-exemplares-edicao').addEventListener('cli
       });
     }
     document.getElementById('edit-add-qtd').value = 1;
+    renderExemplaresDoLivroEdicao(editandoLivroId);
     alert(qtd + ' exemplar(es) adicionado(s) a este título.');
   } catch (err) {
     console.error(err);
