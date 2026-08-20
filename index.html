@@ -79,6 +79,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .03em;
   background: var(--accent-soft); color: var(--accent); padding: 3px 8px; border-radius: 4px;
 }
+.usuario-logado { font-size: 12px; color: var(--ink-soft); }
 .btn-sair { background: none; border: 1px solid var(--line); color: var(--ink-soft); border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: 'Inter', sans-serif; }
 .btn-sair:hover { border-color: var(--stamp); color: var(--stamp); }
 .gate-esqueci { text-align: center; margin-top: 14px; }
@@ -355,6 +356,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <span class="brand-sub">CEEP LUIS PINTO DE CARVALHO</span>
     </div>
     <div class="topbar-status">
+      <span class="usuario-logado" id="usuario-logado" hidden></span>
       <span class="nivel-badge" id="nivel-badge" hidden></span>
       <span class="conn" id="conn-status">conectando…</span>
       <button type="button" id="btn-sair" class="btn-sair">Sair</button>
@@ -560,7 +562,23 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     </section>
 
     <section id="panel-usuarios" class="panel">
-      <p class="etq-ajuda">Níveis: <strong>Pendente</strong> (acabou de entrar pela primeira vez, sem permissão de editar ou excluir), <strong>Bibliotecário</strong> (cadastra, edita e move, mas não exclui), <strong>Administrador</strong> (acesso completo, inclusive gerenciar estes níveis). Para criar um novo usuário: cadastre o e-mail/senha em Firebase Console → Authentication → Users; na primeira vez que essa pessoa entrar no sistema, ela aparece aqui como "Pendente" para você promover.</p>
+      <div id="criar-usuario-card" class="card" style="margin-bottom:20px;" hidden>
+        <h3>Criar novo usuário</h3>
+        <div class="form-grid">
+          <div class="field"><label>E-mail *</label><input id="novo-usuario-email" type="email" /></div>
+          <div class="field"><label>Senha inicial *</label><input id="novo-usuario-senha" type="text" placeholder="mínimo 6 caracteres" /></div>
+          <div class="field field-sm">
+            <label>Nível</label>
+            <select id="novo-usuario-nivel">
+              <option value="pendente">Pendente</option>
+              <option value="bibliotecario">Bibliotecário</option>
+              <option value="administrador">Administrador</option>
+            </select>
+          </div>
+        </div>
+        <button type="button" id="btn-criar-usuario" class="btn btn-primary btn-block">Criar usuário</button>
+      </div>
+      <p class="etq-ajuda">Níveis: <strong>Pendente</strong> (sem permissão de editar ou excluir), <strong>Bibliotecário</strong> (cadastra, edita e move, mas não exclui), <strong>Administrador</strong> (acesso completo, inclusive gerenciar estes níveis e criar novos usuários).</p>
       <div id="usuarios-lista"></div>
     </section>
 
@@ -758,6 +776,9 @@ function exigirNivel(nivelMinimo, callback) {
 }
 
 function carregarNivelUsuario(user) {
+  const elLogado = document.getElementById('usuario-logado');
+  if (elLogado) { elLogado.textContent = user.email || ''; elLogado.hidden = !user.email; }
+
   db.ref('usuarios/' + user.uid).once('value').then(function (snap) {
     if (snap.exists()) {
       nivelUsuarioAtual = snap.val().nivel || 'pendente';
@@ -772,7 +793,10 @@ function carregarNivelUsuario(user) {
       });
     });
   }).catch(function (err) {
-    console.error('Erro ao carregar nível do usuário', err);
+    console.error('Erro ao carregar/gravar nível do usuário em /usuarios — provavelmente as regras do Realtime Database ainda não foram atualizadas.', err);
+    nivelUsuarioAtual = null;
+    atualizarBadgeNivel();
+    connEl.textContent = 'erro de permissão (veja o console)';
   });
 }
 
@@ -904,6 +928,8 @@ try {
       document.getElementById('app').hidden = true;
       nivelUsuarioAtual = null;
       atualizarBadgeNivel();
+      const elLogado = document.getElementById('usuario-logado');
+      if (elLogado) { elLogado.hidden = true; elLogado.textContent = ''; }
     }
   });
 } catch (err) {
@@ -2234,10 +2260,13 @@ document.getElementById('btn-exportar-backup').addEventListener('click', functio
 function renderUsuariosLista() {
   const cont = document.getElementById('usuarios-lista');
   if (!cont) return;
+  const cardCriar = document.getElementById('criar-usuario-card');
   if (!usuarioEhAdmin()) {
+    if (cardCriar) cardCriar.hidden = true;
     cont.innerHTML = '<p class="empty">Apenas administradores podem ver e gerenciar usuários.</p>';
     return;
   }
+  if (cardCriar) cardCriar.hidden = false;
   const entradas = Object.entries(usuariosCache).sort(function (a, b) { return (a[1].criado_em || 0) - (b[1].criado_em || 0); });
   if (entradas.length === 0) {
     cont.innerHTML = '<p class="empty">Nenhum usuário registrado ainda.</p>';
@@ -2272,6 +2301,48 @@ function renderUsuariosLista() {
     });
   });
 }
+
+document.getElementById('btn-criar-usuario').addEventListener('click', async function () {
+  if (!usuarioEhAdmin()) { alert('Apenas administradores podem criar usuários.'); return; }
+  if (!db) { firebaseIndisponivel(); return; }
+  const email = document.getElementById('novo-usuario-email').value.trim();
+  const senha = document.getElementById('novo-usuario-senha').value;
+  const nivel = document.getElementById('novo-usuario-nivel').value;
+  if (!email || !senha) { alert('Preencha e-mail e senha inicial.'); return; }
+  if (senha.length < 6) { alert('A senha precisa ter pelo menos 6 caracteres.'); return; }
+
+  const btn = document.getElementById('btn-criar-usuario');
+  btn.disabled = true;
+  btn.textContent = 'Criando…';
+  let appSecundario = null;
+  try {
+    appSecundario = firebase.initializeApp(firebaseConfig, 'criacao-' + Date.now());
+    const authSecundario = appSecundario.auth();
+    const cred = await authSecundario.createUserWithEmailAndPassword(email, senha);
+    const novoUid = cred.user.uid;
+    await authSecundario.signOut();
+    await appSecundario.delete();
+    appSecundario = null;
+
+    await db.ref('usuarios/' + novoUid).set({ email: email, nivel: nivel, criado_em: Date.now() });
+
+    document.getElementById('novo-usuario-email').value = '';
+    document.getElementById('novo-usuario-senha').value = '';
+    document.getElementById('novo-usuario-nivel').value = 'pendente';
+    alert('Usuário criado. Repasse o e-mail e a senha para a pessoa — ela já pode entrar direto no sistema.');
+  } catch (err) {
+    console.error(err);
+    let msg = 'Erro ao criar usuário.';
+    if (err.code === 'auth/email-already-in-use') msg = 'Já existe uma conta com esse e-mail.';
+    else if (err.code === 'auth/invalid-email') msg = 'E-mail inválido.';
+    else if (err.code === 'auth/weak-password') msg = 'Senha muito fraca (mínimo 6 caracteres).';
+    alert(msg);
+    if (appSecundario) { try { await appSecundario.delete(); } catch (e2) { /* ignora */ } }
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Criar usuário';
+  }
+});
 
 function slug(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
