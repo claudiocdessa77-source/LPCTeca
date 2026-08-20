@@ -74,6 +74,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .brand-mark { font-family: 'Fraunces', serif; font-weight: 700; font-size: 26px; color: var(--ink); }
 .brand-sub { font-family: 'IBM Plex Mono', monospace; font-size: 11px; letter-spacing: .06em; color: var(--ink-soft); margin-left: 12px; }
 .conn { font-family: 'IBM Plex Mono', monospace; font-size: 11px; color: var(--accent); }
+.topbar-status { display: flex; align-items: center; gap: 12px; }
+.nivel-badge {
+  font-family: 'IBM Plex Mono', monospace; font-size: 10px; text-transform: uppercase; letter-spacing: .03em;
+  background: var(--accent-soft); color: var(--accent); padding: 3px 8px; border-radius: 4px;
+}
+.btn-sair { background: none; border: 1px solid var(--line); color: var(--ink-soft); border-radius: 6px; padding: 5px 10px; font-size: 12px; cursor: pointer; font-family: 'Inter', sans-serif; }
+.btn-sair:hover { border-color: var(--stamp); color: var(--stamp); }
+.gate-esqueci { text-align: center; margin-top: 14px; }
+.gate-esqueci a { color: var(--accent); font-size: 12px; text-decoration: underline; }
 
 .tabs { display: flex; gap: 4px; padding: 0 24px; overflow-x: auto; }
 .tab {
@@ -335,6 +344,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <input id="gate-senha" type="password" placeholder="Senha" autocomplete="current-password" />
     <button id="gate-btn" class="btn btn-primary btn-block">Entrar</button>
     <p id="gate-err" class="gate-err" hidden>E-mail ou senha incorretos.</p>
+    <p class="gate-esqueci"><a href="#" id="link-esqueci-senha">Esqueci minha senha</a></p>
   </div>
 </div>
 
@@ -344,7 +354,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <span class="brand-mark">LPCTeca</span>
       <span class="brand-sub">CEEP LUIS PINTO DE CARVALHO</span>
     </div>
-    <div class="conn" id="conn-status">conectando…</div>
+    <div class="topbar-status">
+      <span class="nivel-badge" id="nivel-badge" hidden></span>
+      <span class="conn" id="conn-status">conectando…</span>
+      <button type="button" id="btn-sair" class="btn-sair">Sair</button>
+    </div>
   </header>
 
   <nav class="tabs" id="tabs">
@@ -354,6 +368,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <button class="tab" data-tab="etiquetas">Etiquetas</button>
     <button class="tab" data-tab="enderecos">Ruas e prateleiras</button>
     <button class="tab" data-tab="leitores">Leitores</button>
+    <button class="tab" data-tab="usuarios">Usuários</button>
     <button class="tab tab-soon" data-tab="emprestimo">Empréstimo</button>
     <button class="tab tab-soon" data-tab="devolucao">Devolução</button>
   </nav>
@@ -544,6 +559,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <div id="leitores-lista"></div>
     </section>
 
+    <section id="panel-usuarios" class="panel">
+      <p class="etq-ajuda">Níveis: <strong>Pendente</strong> (acabou de entrar pela primeira vez, sem permissão de editar ou excluir), <strong>Bibliotecário</strong> (cadastra, edita e move, mas não exclui), <strong>Administrador</strong> (acesso completo, inclusive gerenciar estes níveis). Para criar um novo usuário: cadastre o e-mail/senha em Firebase Console → Authentication → Users; na primeira vez que essa pessoa entrar no sistema, ela aparece aqui como "Pendente" para você promover.</p>
+      <div id="usuarios-lista"></div>
+    </section>
+
     <section id="panel-emprestimo" class="panel">
       <div class="soon"><h3>Empréstimo</h3><p>Módulo previsto na Fase 1 do roadmap — ainda não implementado nesta versão.</p></div>
     </section>
@@ -637,19 +657,6 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   </div>
 </div>
 
-<div id="admin-login-modal" class="modal-overlay" hidden>
-  <div class="modal-card" style="max-width:380px;">
-    <h3>Acesso de administrador</h3>
-    <div class="field"><label>E-mail</label><input id="admin-email" type="email" autocomplete="username" /></div>
-    <div class="field"><label>Senha</label><input id="admin-senha" type="password" autocomplete="current-password" /></div>
-    <p id="admin-login-erro" class="gate-err" hidden>E-mail ou senha incorretos.</p>
-    <div class="form-actions">
-      <button type="button" id="btn-cancelar-admin-login" class="btn btn-ghost">Cancelar</button>
-      <button type="button" id="btn-entrar-admin" class="btn btn-primary">Entrar</button>
-    </div>
-  </div>
-</div>
-
 <div id="edit-modal" class="modal-overlay" hidden>
   <div class="modal-card">
     <h3>Editar título</h3>
@@ -728,53 +735,58 @@ document.querySelectorAll('.tab').forEach(function (btn) {
     if (btn.dataset.tab === 'etiquetas') renderListaEtiquetas();
     if (btn.dataset.tab === 'dashboard') renderDashboard();
     if (btn.dataset.tab === 'leitores') renderLeitoresLista();
+    if (btn.dataset.tab === 'usuarios') renderUsuariosLista();
   });
 });
 
 // ================= Acesso ao sistema =================
-let acaoAdminPendente = null;
+let nivelUsuarioAtual = null;
+
+function nivelSuficiente(nivelMinimo) {
+  if (nivelMinimo === 'bibliotecario') return nivelUsuarioAtual === 'administrador' || nivelUsuarioAtual === 'bibliotecario';
+  if (nivelMinimo === 'administrador') return nivelUsuarioAtual === 'administrador';
+  return false;
+}
 
 function usuarioEhAdmin() {
-  return !!(auth && auth.currentUser && !auth.currentUser.isAnonymous);
+  return nivelUsuarioAtual === 'administrador';
 }
 
-function exigirAdmin(callback) {
-  if (usuarioEhAdmin()) { callback(); return; }
-  acaoAdminPendente = callback;
-  document.getElementById('admin-login-erro').hidden = true;
-  document.getElementById('admin-senha').value = '';
-  document.getElementById('admin-login-modal').hidden = false;
-  document.getElementById('admin-email').focus();
+function exigirNivel(nivelMinimo, callback) {
+  if (nivelSuficiente(nivelMinimo)) { callback(); return; }
+  alert('Seu nível de acesso (' + (nivelUsuarioAtual || 'pendente') + ') não permite essa ação. Fale com um administrador do sistema.');
 }
 
-document.getElementById('btn-cancelar-admin-login').addEventListener('click', function () {
-  document.getElementById('admin-login-modal').hidden = true;
-  acaoAdminPendente = null;
-});
+function carregarNivelUsuario(user) {
+  db.ref('usuarios/' + user.uid).once('value').then(function (snap) {
+    if (snap.exists()) {
+      nivelUsuarioAtual = snap.val().nivel || 'pendente';
+      atualizarBadgeNivel();
+      return;
+    }
+    return db.ref('usuarios').once('value').then(function (todosSnap) {
+      const nivel = todosSnap.exists() ? 'pendente' : 'administrador';
+      return db.ref('usuarios/' + user.uid).set({ email: user.email, nivel: nivel, criado_em: Date.now() }).then(function () {
+        nivelUsuarioAtual = nivel;
+        atualizarBadgeNivel();
+      });
+    });
+  }).catch(function (err) {
+    console.error('Erro ao carregar nível do usuário', err);
+  });
+}
 
-document.getElementById('btn-entrar-admin').addEventListener('click', async function () {
-  if (!auth) { firebaseIndisponivel(); return; }
-  const email = document.getElementById('admin-email').value.trim();
-  const senha = document.getElementById('admin-senha').value;
-  const btn = document.getElementById('btn-entrar-admin');
-  btn.disabled = true;
-  btn.textContent = 'Entrando…';
-  try {
-    await auth.signInWithEmailAndPassword(email, senha);
-    document.getElementById('admin-login-modal').hidden = true;
-    const cb = acaoAdminPendente;
-    acaoAdminPendente = null;
-    if (cb) cb();
-  } catch (err) {
-    console.error(err);
-    document.getElementById('admin-login-erro').hidden = false;
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Entrar';
-  }
-});
-document.getElementById('admin-senha').addEventListener('keydown', function (e) {
-  if (e.key === 'Enter') document.getElementById('btn-entrar-admin').click();
+function atualizarBadgeNivel() {
+  const el = document.getElementById('nivel-badge');
+  if (!el) return;
+  const rotulos = { administrador: 'Administrador', bibliotecario: 'Bibliotecário', pendente: 'Pendente' };
+  el.textContent = rotulos[nivelUsuarioAtual] || '';
+  el.hidden = !nivelUsuarioAtual;
+}
+
+document.getElementById('btn-sair').addEventListener('click', function () {
+  if (!auth) return;
+  auth.signOut();
 });
 
 document.getElementById('gate-btn').addEventListener('click', tentarEntrar);
@@ -790,6 +802,7 @@ async function tentarEntrar() {
   btn.disabled = true;
   btn.textContent = 'Entrando…';
   try {
+    await auth.setPersistence(firebase.auth.Auth.Persistence.SESSION);
     await auth.signInWithEmailAndPassword(email, senha);
   } catch (err) {
     console.error(err);
@@ -800,12 +813,27 @@ async function tentarEntrar() {
   }
 }
 
+document.getElementById('link-esqueci-senha').addEventListener('click', async function (e) {
+  e.preventDefault();
+  if (!auth) { firebaseIndisponivel(); return; }
+  const email = document.getElementById('gate-email').value.trim();
+  if (!email) { alert('Digite seu e-mail no campo acima e clique em "Esqueci minha senha" de novo.'); return; }
+  try {
+    await auth.sendPasswordResetEmail(email);
+    alert('Enviamos um link de redefinição de senha para ' + email + '. Confira também a caixa de spam.');
+  } catch (err) {
+    console.error(err);
+    alert('Não foi possível enviar o e-mail. Confira se o endereço está correto.');
+  }
+});
+
 // ================= Estado local =================
 let ruasCache = {};
 let prateleirasCache = {};
 let livrosCache = {};
 let exemplaresCache = {};
 let leitoresCache = {};
+let usuariosCache = {};
 const PALETA_CORES = ['#C0392B', '#D9822B', '#C9A227', '#2F6B4F', '#1F7A6C', '#2E6F9E', '#3E4C9E', '#7A4FA3', '#B0428C', '#6B4A34', '#5B6470', '#22303F'];
 let corRuaSelecionada = PALETA_CORES[0];
 let corRuaEdicaoSelecionada = PALETA_CORES[0];
@@ -866,6 +894,7 @@ try {
     if (user) {
       document.getElementById('gate').hidden = true;
       document.getElementById('app').hidden = false;
+      carregarNivelUsuario(user);
       if (!listenersAttached) {
         listenersAttached = true;
         attachListeners();
@@ -873,6 +902,8 @@ try {
     } else {
       document.getElementById('gate').hidden = false;
       document.getElementById('app').hidden = true;
+      nivelUsuarioAtual = null;
+      atualizarBadgeNivel();
     }
   });
 } catch (err) {
@@ -910,6 +941,10 @@ function attachListeners() {
   db.ref('leitores').on('value', function (snap) {
     leitoresCache = snap.val() || {};
     renderLeitoresLista();
+  });
+  db.ref('usuarios').on('value', function (snap) {
+    usuariosCache = snap.val() || {};
+    renderUsuariosLista();
   });
 }
 
@@ -1044,7 +1079,7 @@ function renderRuasLista() {
 let editandoRuaId = null;
 
 function abrirEdicaoRua(ruaId) {
-  exigirAdmin(function () {
+  exigirNivel('bibliotecario', function () {
     const rua = ruasCache[ruaId];
     if (!rua) return;
     editandoRuaId = ruaId;
@@ -1083,7 +1118,7 @@ document.getElementById('btn-salvar-edicao-rua').addEventListener('click', async
 });
 
 function excluirRua(ruaId) {
-  exigirAdmin(async function () {
+  exigirNivel('administrador', async function () {
     if (!db) { firebaseIndisponivel(); return; }
     const temPrateleiras = Object.values(prateleirasCache).some(function (p) { return p.rua_id === ruaId; });
     if (temPrateleiras) { alert('Esta rua tem prateleiras cadastradas. Exclua as prateleiras dela primeiro.'); return; }
@@ -1099,7 +1134,7 @@ function excluirRua(ruaId) {
 }
 
 function editarPrateleiraRapido(prateleiraId) {
-  exigirAdmin(function () {
+  exigirNivel('bibliotecario', function () {
     const p = prateleirasCache[prateleiraId];
     if (!p) return;
     const novoNumero = prompt('Número da prateleira:', p.numero);
@@ -1118,7 +1153,7 @@ function editarPrateleiraRapido(prateleiraId) {
 }
 
 function excluirPrateleira(prateleiraId) {
-  exigirAdmin(async function () {
+  exigirNivel('administrador', async function () {
     if (!db) { firebaseIndisponivel(); return; }
     const temExemplar = Object.values(exemplaresCache).some(function (ex) { return ex.prateleira_id === prateleiraId; });
     if (temExemplar) { alert('Esta prateleira tem exemplares. Mova-os antes de excluir.'); return; }
@@ -1695,7 +1730,7 @@ function renderAcervo() {
 let editandoLivroId = null;
 
 function abrirEdicaoLivro(livroId) {
-  exigirAdmin(function () {
+  exigirNivel('bibliotecario', function () {
     const livro = livrosCache[livroId];
     if (!livro) return;
     editandoLivroId = livroId;
@@ -1876,7 +1911,7 @@ document.getElementById('btn-adicionar-exemplares-edicao').addEventListener('cli
 });
 
 function excluirLivro(livroId) {
-  exigirAdmin(async function () {
+  exigirNivel('administrador', async function () {
     if (!db) { firebaseIndisponivel(); return; }
     const livro = livrosCache[livroId];
     const titulo = livro ? livro.titulo : 'este título';
@@ -1897,7 +1932,7 @@ function excluirLivro(livroId) {
 }
 
 function excluirExemplar(exemplarId) {
-  exigirAdmin(async function () {
+  exigirNivel('administrador', async function () {
     if (!db) { firebaseIndisponivel(); return; }
     if (!confirm('Excluir este exemplar? Essa ação não pode ser desfeita.')) return;
     try {
@@ -2120,7 +2155,7 @@ function renderLeitoresLista() {
 let editandoLeitorId = null;
 
 function abrirEdicaoLeitor(id) {
-  exigirAdmin(function () {
+  exigirNivel('bibliotecario', function () {
     const l = leitoresCache[id];
     if (!l) return;
     editandoLeitorId = id;
@@ -2165,7 +2200,7 @@ document.getElementById('btn-salvar-edicao-leitor').addEventListener('click', as
 });
 
 function excluirLeitor(id) {
-  exigirAdmin(async function () {
+  exigirNivel('administrador', async function () {
     if (!db) { firebaseIndisponivel(); return; }
     const l = leitoresCache[id];
     if (!confirm('Excluir o leitor "' + (l ? l.nome : '') + '"?')) return;
@@ -2194,6 +2229,49 @@ document.getElementById('btn-exportar-backup').addEventListener('click', functio
   const dataHoje = new Date().toISOString().slice(0, 10);
   XLSX.writeFile(wb, 'backup_lpcteca_' + dataHoje + '.xlsx');
 });
+
+// ================= Usuários e níveis =================
+function renderUsuariosLista() {
+  const cont = document.getElementById('usuarios-lista');
+  if (!cont) return;
+  if (!usuarioEhAdmin()) {
+    cont.innerHTML = '<p class="empty">Apenas administradores podem ver e gerenciar usuários.</p>';
+    return;
+  }
+  const entradas = Object.entries(usuariosCache).sort(function (a, b) { return (a[1].criado_em || 0) - (b[1].criado_em || 0); });
+  if (entradas.length === 0) {
+    cont.innerHTML = '<p class="empty">Nenhum usuário registrado ainda.</p>';
+    return;
+  }
+  cont.innerHTML = entradas.map(function (entry) {
+    const uid = entry[0], u = entry[1];
+    const opcoes = ['pendente', 'bibliotecario', 'administrador'].map(function (n) {
+      const rotulo = n.charAt(0).toUpperCase() + n.slice(1);
+      return '<option value="' + n + '"' + (u.nivel === n ? ' selected' : '') + '>' + rotulo + '</option>';
+    }).join('');
+    return '<div class="leitor-row">' +
+      '<div class="leitor-info"><strong>' + escapeHtml(u.email || '(sem e-mail)') + '</strong>' +
+      (uid === (auth && auth.currentUser && auth.currentUser.uid) ? '<span class="leitor-meta">esta é a sua conta</span>' : '') +
+      '</div>' +
+      '<select class="usuario-nivel-select" data-uid="' + uid + '">' + opcoes + '</select>' +
+      '</div>';
+  }).join('');
+  cont.querySelectorAll('.usuario-nivel-select').forEach(function (sel) {
+    sel.addEventListener('change', async function () {
+      if (!db) { firebaseIndisponivel(); return; }
+      try {
+        await db.ref('usuarios/' + sel.dataset.uid + '/nivel').set(sel.value);
+        if (sel.dataset.uid === (auth && auth.currentUser && auth.currentUser.uid)) {
+          nivelUsuarioAtual = sel.value;
+          atualizarBadgeNivel();
+        }
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao atualizar o nível deste usuário.');
+      }
+    });
+  });
+}
 
 function slug(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
