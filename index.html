@@ -170,6 +170,15 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   padding: 9px 11px; border: 1px solid var(--line); border-radius: 6px; font-size: 14px; font-family: inherit; background: var(--white);
 }
 .form-actions { display: flex; justify-content: flex-end; gap: 10px; margin-top: 22px; }
+.capa-row { display: flex; gap: 8px; }
+.capa-row input[type="text"], .capa-row input:not([type]) { flex: 1; }
+.btn-foto {
+  flex-shrink: 0; display: inline-flex; align-items: center; background: var(--paper); border: 1px solid var(--line);
+  border-radius: 6px; padding: 9px 12px; cursor: pointer; font-size: 13px; color: var(--ink); white-space: nowrap;
+}
+.btn-foto:hover { background: var(--accent-soft); border-color: var(--accent); }
+.capa-status { font-size: 12px; color: var(--ink-soft); margin-top: 6px; min-height: 16px; }
+.capa-preview { width: 64px; height: 92px; object-fit: cover; border-radius: 4px; margin-top: 6px; box-shadow: var(--shadow); }
 
 .btn { font-family: 'Inter', sans-serif; font-weight: 600; font-size: 14px; padding: 11px 22px; border-radius: 7px; border: none; cursor: pointer; }
 .btn-primary { background: var(--accent); color: var(--white); }
@@ -476,7 +485,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             </select>
           </div>
           <div class="field field-wide"><label>Sinopse</label><textarea id="f-sinopse" rows="2"></textarea></div>
-          <div class="field field-wide"><label>URL da capa (opcional)</label><input id="f-capa" /></div>
+          <div class="field field-wide">
+            <label>URL da capa (opcional)</label>
+            <div class="capa-row">
+              <input id="f-capa" placeholder="https://…" />
+              <label for="f-capa-foto" class="btn-foto">📷 Tirar/escolher foto</label>
+              <input type="file" id="f-capa-foto" accept="image/*" capture="environment" hidden />
+            </div>
+            <div id="f-capa-status" class="capa-status"></div>
+            <img id="f-capa-preview" class="capa-preview" hidden />
+          </div>
           <div class="field field-sm"><label>Rua *</label><select id="f-rua" required></select></div>
           <div class="field field-sm"><label>Prateleira *</label><select id="f-prateleira" required></select></div>
           <div class="field field-sm"><label>Nº de exemplares *</label><input id="f-qtd" type="number" min="1" value="1" required /></div>
@@ -709,7 +727,16 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </select>
       </div>
       <div class="field field-wide"><label>Sinopse</label><textarea id="edit-sinopse" rows="2"></textarea></div>
-      <div class="field field-wide"><label>URL da capa (opcional)</label><input id="edit-capa" /></div>
+      <div class="field field-wide">
+        <label>URL da capa (opcional)</label>
+        <div class="capa-row">
+          <input id="edit-capa" placeholder="https://…" />
+          <label for="edit-capa-foto" class="btn-foto">📷 Tirar/escolher foto</label>
+          <input type="file" id="edit-capa-foto" accept="image/*" capture="environment" hidden />
+        </div>
+        <div id="edit-capa-status" class="capa-status"></div>
+        <img id="edit-capa-preview" class="capa-preview" hidden />
+      </div>
     </div>
     <div class="form-actions">
       <button type="button" id="btn-cancelar-edicao" class="btn btn-ghost">Cancelar</button>
@@ -1226,7 +1253,15 @@ function mostrarLivroExistente(livroId, livro) {
   document.getElementById('existing-meta').textContent = [livro.autores, livro.editora, livro.ano].filter(Boolean).join(' · ');
   document.getElementById('existing-count').textContent = qtdAtual + ' exemplar(es) já cadastrado(s) neste título.';
   const cover = document.getElementById('existing-cover');
-  if (livro.capa_url) { cover.src = livro.capa_url; cover.style.display = ''; } else { cover.style.display = 'none'; }
+  if (livro.capa_local) {
+    cover.style.display = '';
+    carregarCapaLocalEm(cover, livroId);
+  } else if (livro.capa_url) {
+    cover.src = livro.capa_url;
+    cover.style.display = '';
+  } else {
+    cover.style.display = 'none';
+  }
   existingCard.hidden = false;
   addExemplarForm.dataset.livroId = livroId;
   addExemplarForm.hidden = false;
@@ -1375,6 +1410,8 @@ document.getElementById('btn-cancelar').addEventListener('click', function () {
   document.getElementById('fontes-extra').hidden = true;
   scanStatus.textContent = '';
   scanInput.value = '';
+  capaLocalPendenteCadastro = null;
+  document.getElementById('f-capa-preview').hidden = true;
   scanInput.focus();
 });
 
@@ -1462,7 +1499,8 @@ livroForm.addEventListener('submit', async function (e) {
     cdd_cdu: document.getElementById('f-cdd').value.trim(),
     eixo_tecnico: document.getElementById('f-eixo').value,
     sinopse: document.getElementById('f-sinopse').value.trim(),
-    capa_url: document.getElementById('f-capa').value.trim(),
+    capa_url: capaLocalPendenteCadastro ? '' : document.getElementById('f-capa').value.trim(),
+    capa_local: !!capaLocalPendenteCadastro,
     criado_em: Date.now()
   };
   const qtd = Math.max(1, parseInt(document.getElementById('f-qtd').value, 10) || 1);
@@ -1472,7 +1510,13 @@ livroForm.addEventListener('submit', async function (e) {
   btn.textContent = 'Salvando…';
 
   try {
-    await criarLivroComExemplares(dados, rua_id, prateleira_id, qtd);
+    const novoLivroId = await criarLivroComExemplares(dados, rua_id, prateleira_id, qtd);
+    if (capaLocalPendenteCadastro) {
+      await db.ref('capas/' + novoLivroId).set(capaLocalPendenteCadastro);
+      capasCacheLocal[novoLivroId] = capaLocalPendenteCadastro;
+    }
+    capaLocalPendenteCadastro = null;
+    document.getElementById('f-capa-preview').hidden = true;
 
     scanStatus.textContent = qtd + ' exemplar(es) salvo(s) com sucesso.';
     livroForm.hidden = true;
@@ -1723,7 +1767,9 @@ function renderAcervo() {
     }).join('');
 
     return '<div class="livro-card">' +
-      (l.capa_url ? '<img class="livro-capa" src="' + l.capa_url + '" alt="Capa de ' + escapeHtml(l.titulo) + '" />' : '<div class="livro-capa livro-capa-vazia">sem capa</div>') +
+      (l.capa_local ? '<img class="livro-capa livro-capa-local" data-livro-id="' + id + '" alt="Capa de ' + escapeHtml(l.titulo) + '" /> ' :
+       l.capa_url ? '<img class="livro-capa" src="' + l.capa_url + '" alt="Capa de ' + escapeHtml(l.titulo) + '" />' :
+       '<div class="livro-capa livro-capa-vazia">sem capa</div>') +
       '<div class="livro-info">' +
       '<div class="livro-header"><h3>' + escapeHtml(l.titulo) + '</h3>' +
       '<div class="livro-actions">' +
@@ -1734,6 +1780,10 @@ function renderAcervo() {
       '<div class="livro-exemplares">' + (chipsExemplares || '<span class="chip chip-empty">sem exemplares</span>') + '</div>' +
       '</div></div>';
   }).join('');
+
+  cont.querySelectorAll('.livro-capa-local').forEach(function (img) {
+    carregarCapaLocalEm(img, img.dataset.livroId);
+  });
 
   cont.querySelectorAll('.barcode').forEach(function (svg) {
     try {
@@ -1773,6 +1823,16 @@ function abrirEdicaoLivro(livroId) {
     document.getElementById('edit-capa').value = livro.capa_url || '';
     document.getElementById('edit-add-qtd').value = 1;
     document.getElementById('edit-mover-todos-rua').value = '';
+    capaLocalPendenteEdicao = null;
+    document.getElementById('edit-capa-status').textContent = '';
+    const previewEdicao = document.getElementById('edit-capa-preview');
+    if (livro.capa_local) {
+      previewEdicao.hidden = false;
+      carregarCapaLocalEm(previewEdicao, livroId);
+    } else {
+      previewEdicao.hidden = true;
+      previewEdicao.src = '';
+    }
     renderRuasSelects();
     renderExemplaresDoLivroEdicao(livroId);
     document.getElementById('edit-modal').hidden = false;
@@ -1869,6 +1929,7 @@ document.getElementById('btn-mover-todos-exemplares').addEventListener('click', 
 document.getElementById('btn-cancelar-edicao').addEventListener('click', function () {
   document.getElementById('edit-modal').hidden = true;
   editandoLivroId = null;
+  capaLocalPendenteEdicao = null;
 });
 
 document.getElementById('btn-salvar-edicao').addEventListener('click', async function () {
@@ -1884,6 +1945,20 @@ document.getElementById('btn-salvar-edicao').addEventListener('click', async fun
   const btnSalvar = document.getElementById('btn-salvar-edicao');
   btnSalvar.disabled = true;
   btnSalvar.textContent = 'Salvando…';
+  const livroAtual = livrosCache[editandoLivroId] || {};
+  const urlDigitada = document.getElementById('edit-capa').value.trim();
+  let capaLocalFinal, capaUrlFinal;
+  if (capaLocalPendenteEdicao) {
+    capaLocalFinal = true;
+    capaUrlFinal = '';
+  } else if (urlDigitada) {
+    capaLocalFinal = false;
+    capaUrlFinal = urlDigitada;
+  } else {
+    capaLocalFinal = !!livroAtual.capa_local;
+    capaUrlFinal = livroAtual.capa_url || '';
+  }
+
   try {
     await db.ref('livros/' + editandoLivroId).update({
       titulo: titulo,
@@ -1896,8 +1971,14 @@ document.getElementById('btn-salvar-edicao').addEventListener('click', async fun
       cdd_cdu: document.getElementById('edit-cdd').value.trim(),
       eixo_tecnico: document.getElementById('edit-eixo').value,
       sinopse: document.getElementById('edit-sinopse').value.trim(),
-      capa_url: document.getElementById('edit-capa').value.trim()
+      capa_url: capaUrlFinal,
+      capa_local: capaLocalFinal
     });
+    if (capaLocalPendenteEdicao) {
+      await db.ref('capas/' + editandoLivroId).set(capaLocalPendenteEdicao);
+      capasCacheLocal[editandoLivroId] = capaLocalPendenteEdicao;
+      capaLocalPendenteEdicao = null;
+    }
     document.getElementById('edit-modal').hidden = true;
     editandoLivroId = null;
   } catch (err) {
@@ -2343,6 +2424,70 @@ document.getElementById('btn-criar-usuario').addEventListener('click', async fun
     btn.textContent = 'Criar usuário';
   }
 });
+
+// ================= Foto da capa (guardada no Realtime Database, sem Storage) =================
+let capaLocalPendenteCadastro = null;
+let capaLocalPendenteEdicao = null;
+let capasCacheLocal = {};
+
+function redimensionarImagemParaDataUrl(arquivo, larguraMax) {
+  return new Promise(function (resolve, reject) {
+    const leitor = new FileReader();
+    leitor.onload = function (e) {
+      const img = new Image();
+      img.onload = function () {
+        const escala = Math.min(1, larguraMax / img.width);
+        const canvas = document.createElement('canvas');
+        canvas.width = Math.round(img.width * escala);
+        canvas.height = Math.round(img.height * escala);
+        const ctx = canvas.getContext('2d');
+        ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+        resolve(canvas.toDataURL('image/jpeg', 0.75));
+      };
+      img.onerror = function () { reject(new Error('Não foi possível abrir a imagem.')); };
+      img.src = e.target.result;
+    };
+    leitor.onerror = function () { reject(new Error('Não foi possível ler o arquivo.')); };
+    leitor.readAsDataURL(arquivo);
+  });
+}
+
+function configurarCapturaCapaLocal(inputFileId, statusId, previewId, definirPendente) {
+  const inputFile = document.getElementById(inputFileId);
+  const status = document.getElementById(statusId);
+  const preview = document.getElementById(previewId);
+  inputFile.addEventListener('change', async function () {
+    const arquivo = inputFile.files && inputFile.files[0];
+    if (!arquivo) return;
+    status.textContent = 'Processando foto…';
+    try {
+      const dataUrl = await redimensionarImagemParaDataUrl(arquivo, 600);
+      definirPendente(dataUrl);
+      preview.src = dataUrl;
+      preview.hidden = false;
+      status.textContent = 'Foto pronta — será salva junto com o título.';
+    } catch (err) {
+      console.error(err);
+      status.textContent = 'Erro ao processar a foto.';
+    } finally {
+      inputFile.value = '';
+    }
+  });
+}
+
+configurarCapturaCapaLocal('f-capa-foto', 'f-capa-status', 'f-capa-preview', function (dataUrl) { capaLocalPendenteCadastro = dataUrl; });
+configurarCapturaCapaLocal('edit-capa-foto', 'edit-capa-status', 'edit-capa-preview', function (dataUrl) { capaLocalPendenteEdicao = dataUrl; });
+
+function carregarCapaLocalEm(imgEl, livroId) {
+  if (capasCacheLocal[livroId]) { imgEl.src = capasCacheLocal[livroId]; return; }
+  if (!db) return;
+  db.ref('capas/' + livroId).once('value').then(function (snap) {
+    if (snap.exists()) {
+      capasCacheLocal[livroId] = snap.val();
+      imgEl.src = snap.val();
+    }
+  }).catch(function (err) { console.warn('Erro ao carregar capa local', err); });
+}
 
 function slug(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
