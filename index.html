@@ -178,6 +178,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 }
 
 /* Painel gerencial */
+.dash-topo { display: flex; justify-content: flex-end; margin-bottom: 16px; }
 .dash-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 14px; margin-bottom: 28px; }
 .dash-card {
   background: var(--white); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px;
@@ -220,6 +221,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .status { font-size: 10px; font-weight: 600; text-transform: uppercase; padding: 3px 8px; border-radius: 4px; font-family: 'IBM Plex Mono', monospace; }
 .status-disponível { background: var(--accent-soft); color: var(--accent); }
 .status-emprestado { background: var(--stamp-soft); color: var(--stamp); }
+.status-ativo { background: var(--accent-soft); color: var(--accent); }
+.status-bloqueado, .status-suspenso { background: var(--stamp-soft); color: var(--stamp); }
+
+/* Leitores */
+.leitor-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.leitor-row:last-child { border-bottom: none; }
+.leitor-info { flex: 1; min-width: 180px; display: flex; flex-direction: column; gap: 2px; }
+.leitor-meta { font-size: 12px; color: var(--ink-soft); }
 
 /* Endereços */
 .enderecos-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; margin-bottom: 24px; }
@@ -227,6 +236,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .card h3 { font-size: 16px; margin-bottom: 14px; }
 .card .field { margin-bottom: 12px; }
 .rua-row { display: flex; justify-content: space-between; align-items: center; gap: 14px; padding: 12px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
+.rua-acoes { display: flex; gap: 6px; flex-shrink: 0; }
+.chip-prateleira { display: inline-flex; align-items: center; gap: 4px; padding-right: 4px; }
+.chip-editar { cursor: pointer; }
+.chip-editar:hover { text-decoration: underline; }
+.chip-excluir { background: none; border: none; color: var(--stamp); cursor: pointer; font-size: 11px; padding: 0; line-height: 1; }
 .rua-tema { display: block; font-size: 12px; color: var(--ink-soft); font-weight: 400; }
 .cor-swatches { display: flex; flex-wrap: wrap; gap: 6px; }
 .cor-swatch {
@@ -337,6 +351,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <button class="tab" data-tab="acervo">Acervo</button>
     <button class="tab" data-tab="etiquetas">Etiquetas</button>
     <button class="tab" data-tab="enderecos">Ruas e prateleiras</button>
+    <button class="tab" data-tab="leitores">Leitores</button>
     <button class="tab tab-soon" data-tab="emprestimo">Empréstimo</button>
     <button class="tab tab-soon" data-tab="devolucao">Devolução</button>
   </nav>
@@ -502,6 +517,31 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <div id="ruas-lista" class="ruas-lista"></div>
     </section>
 
+    <section id="panel-leitores" class="panel">
+      <div class="panel-head">
+        <input id="leitor-busca" class="search" placeholder="Buscar por nome ou matrícula…" />
+      </div>
+      <div class="card" style="margin-bottom:20px;">
+        <h3>Novo leitor</h3>
+        <div class="form-grid">
+          <div class="field field-wide"><label>Nome completo *</label><input id="leitor-nome" /></div>
+          <div class="field field-sm"><label>Matrícula *</label><input id="leitor-matricula" /></div>
+          <div class="field field-sm">
+            <label>Tipo *</label>
+            <select id="leitor-tipo">
+              <option value="Aluno">Aluno</option>
+              <option value="Professor">Professor</option>
+              <option value="Servidor">Servidor</option>
+            </select>
+          </div>
+          <div class="field field-sm"><label>Turma/Curso (opcional)</label><input id="leitor-turma" /></div>
+          <div class="field field-sm"><label>Contato (opcional)</label><input id="leitor-contato" /></div>
+        </div>
+        <button type="button" id="btn-add-leitor" class="btn btn-primary btn-block">Adicionar leitor</button>
+      </div>
+      <div id="leitores-lista"></div>
+    </section>
+
     <section id="panel-emprestimo" class="panel">
       <div class="soon"><h3>Empréstimo</h3><p>Módulo previsto na Fase 1 do roadmap — ainda não implementado nesta versão.</p></div>
     </section>
@@ -509,6 +549,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <div class="soon"><h3>Devolução</h3><p>Módulo previsto na Fase 1 do roadmap — ainda não implementado nesta versão.</p></div>
     </section>
     <section id="panel-dashboard" class="panel active">
+      <div class="dash-topo">
+        <button type="button" id="btn-exportar-backup" class="btn btn-ghost">Exportar backup completo (.xlsx)</button>
+      </div>
       <div class="dash-grid">
         <button type="button" class="dash-card" id="dash-titulos">
           <span class="dash-numero" id="dash-titulos-num">0</span>
@@ -545,6 +588,64 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     </section>
 
   </main>
+</div>
+
+<div id="edit-leitor-modal" class="modal-overlay" hidden>
+  <div class="modal-card" style="max-width:480px;">
+    <h3>Editar leitor</h3>
+    <div class="form-grid">
+      <div class="field field-wide"><label>Nome completo *</label><input id="edit-leitor-nome" /></div>
+      <div class="field field-sm"><label>Matrícula *</label><input id="edit-leitor-matricula" /></div>
+      <div class="field field-sm">
+        <label>Tipo *</label>
+        <select id="edit-leitor-tipo">
+          <option value="Aluno">Aluno</option>
+          <option value="Professor">Professor</option>
+          <option value="Servidor">Servidor</option>
+        </select>
+      </div>
+      <div class="field field-sm"><label>Turma/Curso</label><input id="edit-leitor-turma" /></div>
+      <div class="field field-sm"><label>Contato</label><input id="edit-leitor-contato" /></div>
+      <div class="field field-sm">
+        <label>Situação</label>
+        <select id="edit-leitor-situacao">
+          <option value="Ativo">Ativo</option>
+          <option value="Bloqueado">Bloqueado</option>
+          <option value="Suspenso">Suspenso</option>
+        </select>
+      </div>
+    </div>
+    <div class="form-actions">
+      <button type="button" id="btn-cancelar-edicao-leitor" class="btn btn-ghost">Cancelar</button>
+      <button type="button" id="btn-salvar-edicao-leitor" class="btn btn-primary">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="edit-rua-modal" class="modal-overlay" hidden>
+  <div class="modal-card" style="max-width:420px;">
+    <h3>Editar rua</h3>
+    <div class="field"><label>Nome da rua</label><input id="edit-rua-nome" /></div>
+    <div class="field"><label>Tema (opcional)</label><input id="edit-rua-tema" /></div>
+    <div class="field"><label>Cor de referência</label><div id="edit-rua-cores" class="cor-swatches"></div></div>
+    <div class="form-actions">
+      <button type="button" id="btn-cancelar-edicao-rua" class="btn btn-ghost">Cancelar</button>
+      <button type="button" id="btn-salvar-edicao-rua" class="btn btn-primary">Salvar</button>
+    </div>
+  </div>
+</div>
+
+<div id="admin-login-modal" class="modal-overlay" hidden>
+  <div class="modal-card" style="max-width:380px;">
+    <h3>Acesso de administrador</h3>
+    <div class="field"><label>E-mail</label><input id="admin-email" type="email" autocomplete="username" /></div>
+    <div class="field"><label>Senha</label><input id="admin-senha" type="password" autocomplete="current-password" /></div>
+    <p id="admin-login-erro" class="gate-err" hidden>E-mail ou senha incorretos.</p>
+    <div class="form-actions">
+      <button type="button" id="btn-cancelar-admin-login" class="btn btn-ghost">Cancelar</button>
+      <button type="button" id="btn-entrar-admin" class="btn btn-primary">Entrar</button>
+    </div>
+  </div>
 </div>
 
 <div id="edit-modal" class="modal-overlay" hidden>
@@ -624,18 +725,57 @@ document.querySelectorAll('.tab').forEach(function (btn) {
     if (btn.dataset.tab === 'cadastro') document.getElementById('scan-input').focus();
     if (btn.dataset.tab === 'etiquetas') renderListaEtiquetas();
     if (btn.dataset.tab === 'dashboard') renderDashboard();
+    if (btn.dataset.tab === 'leitores') renderLeitoresLista();
   });
 });
 
 // ================= Senha de acesso (não depende do Firebase) =================
 const SENHA = "lpc123";
-const SENHA_ADMIN = "admin2026";
-function verificarAdmin() {
-  const senha = prompt('Senha de administrador para editar ou excluir dados do acervo:');
-  if (senha === SENHA_ADMIN) return true;
-  if (senha !== null) alert('Senha incorreta.');
-  return false;
+let acaoAdminPendente = null;
+
+function usuarioEhAdmin() {
+  return !!(auth && auth.currentUser && !auth.currentUser.isAnonymous);
 }
+
+function exigirAdmin(callback) {
+  if (usuarioEhAdmin()) { callback(); return; }
+  acaoAdminPendente = callback;
+  document.getElementById('admin-login-erro').hidden = true;
+  document.getElementById('admin-senha').value = '';
+  document.getElementById('admin-login-modal').hidden = false;
+  document.getElementById('admin-email').focus();
+}
+
+document.getElementById('btn-cancelar-admin-login').addEventListener('click', function () {
+  document.getElementById('admin-login-modal').hidden = true;
+  acaoAdminPendente = null;
+});
+
+document.getElementById('btn-entrar-admin').addEventListener('click', async function () {
+  if (!auth) { firebaseIndisponivel(); return; }
+  const email = document.getElementById('admin-email').value.trim();
+  const senha = document.getElementById('admin-senha').value;
+  const btn = document.getElementById('btn-entrar-admin');
+  btn.disabled = true;
+  btn.textContent = 'Entrando…';
+  try {
+    await auth.signInWithEmailAndPassword(email, senha);
+    document.getElementById('admin-login-modal').hidden = true;
+    const cb = acaoAdminPendente;
+    acaoAdminPendente = null;
+    if (cb) cb();
+  } catch (err) {
+    console.error(err);
+    document.getElementById('admin-login-erro').hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
+  }
+});
+document.getElementById('admin-senha').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') document.getElementById('btn-entrar-admin').click();
+});
+
 const gate = document.getElementById('gate');
 const app = document.getElementById('app');
 document.getElementById('gate-btn').addEventListener('click', tentarEntrar);
@@ -658,8 +798,10 @@ let ruasCache = {};
 let prateleirasCache = {};
 let livrosCache = {};
 let exemplaresCache = {};
+let leitoresCache = {};
 const PALETA_CORES = ['#C0392B', '#D9822B', '#C9A227', '#2F6B4F', '#1F7A6C', '#2E6F9E', '#3E4C9E', '#7A4FA3', '#B0428C', '#6B4A34', '#5B6470', '#22303F'];
 let corRuaSelecionada = PALETA_CORES[0];
+let corRuaEdicaoSelecionada = PALETA_CORES[0];
 
 function renderCoresSwatches() {
   const cont = document.getElementById('rua-cores');
@@ -675,6 +817,20 @@ function renderCoresSwatches() {
   });
 }
 renderCoresSwatches();
+
+function renderCoresSwatchesEdicao() {
+  const cont = document.getElementById('edit-rua-cores');
+  cont.innerHTML = PALETA_CORES.map(function (cor) {
+    return '<button type="button" class="cor-swatch' + (cor === corRuaEdicaoSelecionada ? ' selecionada' : '') + '" data-cor="' + cor + '" style="background:' + cor + '" title="' + cor + '"></button>';
+  }).join('');
+  cont.querySelectorAll('.cor-swatch').forEach(function (btn) {
+    btn.addEventListener('click', function () {
+      corRuaEdicaoSelecionada = btn.dataset.cor;
+      cont.querySelectorAll('.cor-swatch').forEach(function (b) { b.classList.remove('selecionada'); });
+      btn.classList.add('selecionada');
+    });
+  });
+}
 
 // ================= Firebase =================
 // SUBSTITUA pelos dados do seu projeto Firebase (Configurações do projeto > Geral > Seus apps > Web)
@@ -742,6 +898,10 @@ function attachListeners() {
     renderAcervo();
     renderDashboard();
   });
+  db.ref('leitores').on('value', function (snap) {
+    leitoresCache = snap.val() || {};
+    renderLeitoresLista();
+  });
 }
 
 // ================= Ruas e Prateleiras =================
@@ -805,6 +965,8 @@ document.getElementById('btn-add-rua').addEventListener('click', function () {
   if (!db) { firebaseIndisponivel(); return; }
   const nome = document.getElementById('rua-nome').value.trim();
   if (!nome) return;
+  const jaExiste = Object.values(ruasCache).some(function (r) { return (r.nome || '').trim().toLowerCase() === nome.toLowerCase(); });
+  if (jaExiste) { alert('Já existe uma rua com esse nome.'); return; }
   const tema = document.getElementById('rua-tema').value.trim();
   const ordem = Object.keys(ruasCache).length;
   db.ref('ruas').push({ nome: nome, tema: tema, cor: corRuaSelecionada, ordem: ordem, criado_em: Date.now() });
@@ -821,6 +983,8 @@ document.getElementById('btn-add-prateleira').addEventListener('click', function
   const capValue = document.getElementById('prat-cap').value;
   const capacidade = capValue ? parseInt(capValue, 10) : null;
   if (!rua_id || !numero) { alert('Selecione a rua e informe o número da prateleira.'); return; }
+  const jaExiste = Object.values(prateleirasCache).some(function (p) { return p.rua_id === rua_id && p.numero === numero; });
+  if (jaExiste) { alert('Essa rua já tem uma prateleira com esse número.'); return; }
   db.ref('prateleiras').push({ rua_id: rua_id, numero: numero, capacidade: capacidade, criado_em: Date.now() });
   document.getElementById('prat-numero').value = '';
   document.getElementById('prat-cap').value = '';
@@ -839,13 +1003,124 @@ function renderRuasLista() {
       .filter(function (e) { return e[1].rua_id === id; })
       .sort(function (a, b) { return (a[1].numero || 0) - (b[1].numero || 0); });
     const chips = prats.map(function (e) {
-      const p = e[1];
-      return '<span class="chip">Prateleira ' + String(p.numero).padStart(2, '0') + (p.capacidade ? ' · até ' + p.capacidade : '') + '</span>';
+      const pid = e[0], p = e[1];
+      return '<span class="chip chip-prateleira">' +
+        '<span class="chip-editar" data-id="' + pid + '">Prateleira ' + String(p.numero).padStart(2, '0') + (p.capacidade ? ' · até ' + p.capacidade : '') + '</span>' +
+        '<button type="button" class="chip-excluir" data-id="' + pid + '" title="Excluir prateleira">✕</button>' +
+        '</span>';
     }).join('') || '<span class="chip chip-empty">sem prateleiras</span>';
-    return '<div class="rua-row"><div class="rua-nome"><strong><span class="rua-cor-dot" style="background:' + (r.cor || 'var(--accent)') + '"></span>' + escapeHtml(r.nome) + '</strong>' +
+    return '<div class="rua-row">' +
+      '<div class="rua-nome"><strong><span class="rua-cor-dot" style="background:' + (r.cor || 'var(--accent)') + '"></span>' + escapeHtml(r.nome) + '</strong>' +
       (r.tema ? '<span class="rua-tema">' + escapeHtml(r.tema) + '</span>' : '') +
-      '</div><div class="rua-chips">' + chips + '</div></div>';
+      '</div><div class="rua-chips">' + chips + '</div>' +
+      '<div class="rua-acoes"><button type="button" class="btn-acao btn-editar-rua" data-id="' + id + '">Editar</button>' +
+      '<button type="button" class="btn-acao btn-excluir-rua" data-id="' + id + '">Excluir</button></div>' +
+      '</div>';
   }).join('');
+
+  cont.querySelectorAll('.btn-editar-rua').forEach(function (btn) {
+    btn.addEventListener('click', function () { abrirEdicaoRua(btn.dataset.id); });
+  });
+  cont.querySelectorAll('.btn-excluir-rua').forEach(function (btn) {
+    btn.addEventListener('click', function () { excluirRua(btn.dataset.id); });
+  });
+  cont.querySelectorAll('.chip-editar').forEach(function (span) {
+    span.addEventListener('click', function () { editarPrateleiraRapido(span.dataset.id); });
+  });
+  cont.querySelectorAll('.chip-excluir').forEach(function (btn) {
+    btn.addEventListener('click', function () { excluirPrateleira(btn.dataset.id); });
+  });
+}
+
+let editandoRuaId = null;
+
+function abrirEdicaoRua(ruaId) {
+  exigirAdmin(function () {
+    const rua = ruasCache[ruaId];
+    if (!rua) return;
+    editandoRuaId = ruaId;
+    document.getElementById('edit-rua-nome').value = rua.nome || '';
+    document.getElementById('edit-rua-tema').value = rua.tema || '';
+    corRuaEdicaoSelecionada = rua.cor || PALETA_CORES[0];
+    renderCoresSwatchesEdicao();
+    document.getElementById('edit-rua-modal').hidden = false;
+  });
+}
+
+document.getElementById('btn-cancelar-edicao-rua').addEventListener('click', function () {
+  document.getElementById('edit-rua-modal').hidden = true;
+  editandoRuaId = null;
+});
+
+document.getElementById('btn-salvar-edicao-rua').addEventListener('click', async function () {
+  if (!editandoRuaId) return;
+  if (!db) { firebaseIndisponivel(); return; }
+  const nome = document.getElementById('edit-rua-nome').value.trim();
+  if (!nome) { alert('Informe o nome da rua.'); return; }
+  const duplicada = Object.entries(ruasCache).some(function (e) { return e[0] !== editandoRuaId && (e[1].nome || '').trim().toLowerCase() === nome.toLowerCase(); });
+  if (duplicada) { alert('Já existe outra rua com esse nome.'); return; }
+  try {
+    await db.ref('ruas/' + editandoRuaId).update({
+      nome: nome,
+      tema: document.getElementById('edit-rua-tema').value.trim(),
+      cor: corRuaEdicaoSelecionada
+    });
+    document.getElementById('edit-rua-modal').hidden = true;
+    editandoRuaId = null;
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao salvar a rua.');
+  }
+});
+
+function excluirRua(ruaId) {
+  exigirAdmin(async function () {
+    if (!db) { firebaseIndisponivel(); return; }
+    const temPrateleiras = Object.values(prateleirasCache).some(function (p) { return p.rua_id === ruaId; });
+    if (temPrateleiras) { alert('Esta rua tem prateleiras cadastradas. Exclua as prateleiras dela primeiro.'); return; }
+    const rua = ruasCache[ruaId];
+    if (!confirm('Excluir a rua "' + (rua ? rua.nome : '') + '"?')) return;
+    try {
+      await db.ref('ruas/' + ruaId).remove();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir a rua.');
+    }
+  });
+}
+
+function editarPrateleiraRapido(prateleiraId) {
+  exigirAdmin(function () {
+    const p = prateleirasCache[prateleiraId];
+    if (!p) return;
+    const novoNumero = prompt('Número da prateleira:', p.numero);
+    if (novoNumero === null) return;
+    const numero = parseInt(novoNumero, 10);
+    if (!numero) { alert('Número inválido.'); return; }
+    const novaCap = prompt('Capacidade estimada (opcional, deixe vazio para remover):', p.capacidade || '');
+    if (novaCap === null) return;
+    const capacidade = novaCap.trim() ? parseInt(novaCap, 10) : null;
+    if (!db) { firebaseIndisponivel(); return; }
+    db.ref('prateleiras/' + prateleiraId).update({ numero: numero, capacidade: capacidade }).catch(function (err) {
+      console.error(err);
+      alert('Erro ao salvar a prateleira.');
+    });
+  });
+}
+
+function excluirPrateleira(prateleiraId) {
+  exigirAdmin(async function () {
+    if (!db) { firebaseIndisponivel(); return; }
+    const temExemplar = Object.values(exemplaresCache).some(function (ex) { return ex.prateleira_id === prateleiraId; });
+    if (temExemplar) { alert('Esta prateleira tem exemplares. Mova-os antes de excluir.'); return; }
+    if (!confirm('Excluir esta prateleira?')) return;
+    try {
+      await db.ref('prateleiras/' + prateleiraId).remove();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir a prateleira.');
+    }
+  });
 }
 
 function escapeHtml(s) {
@@ -1070,17 +1345,7 @@ addExemplarForm.addEventListener('submit', async function (e) {
   btn.disabled = true;
   btn.textContent = 'Salvando…';
   try {
-    for (let i = 0; i < qtd; i++) {
-      const codigo = await proximoCodigoExemplar();
-      await db.ref('exemplares').push({
-        livro_id: livroId,
-        codigo: codigo,
-        rua_id: rua_id,
-        prateleira_id: prateleira_id,
-        status: 'Disponível',
-        criado_em: Date.now()
-      });
-    }
+    await adicionarExemplaresAoLivro(livroId, rua_id, prateleira_id, qtd);
     scanStatus.textContent = qtd + ' exemplar(es) adicionado(s) ao título existente.';
     existingCard.hidden = true;
     addExemplarForm.hidden = true;
@@ -1137,20 +1402,7 @@ livroForm.addEventListener('submit', async function (e) {
   btn.textContent = 'Salvando…';
 
   try {
-    const livroRef = await db.ref('livros').push(dados);
-    const livroId = livroRef.key;
-
-    for (let i = 0; i < qtd; i++) {
-      const codigo = await proximoCodigoExemplar();
-      await db.ref('exemplares').push({
-        livro_id: livroId,
-        codigo: codigo,
-        rua_id: rua_id,
-        prateleira_id: prateleira_id,
-        status: 'Disponível',
-        criado_em: Date.now()
-      });
-    }
+    await criarLivroComExemplares(dados, rua_id, prateleira_id, qtd);
 
     scanStatus.textContent = qtd + ' exemplar(es) salvo(s) com sucesso.';
     livroForm.hidden = true;
@@ -1172,6 +1424,43 @@ function proximoCodigoExemplar() {
     const n = res.snapshot.val();
     return 'LPC' + String(n).padStart(6, '0');
   });
+}
+
+async function criarLivroComExemplares(dadosLivro, rua_id, prateleira_id, qtd) {
+  const livroId = db.ref('livros').push().key;
+  const updates = {};
+  updates['livros/' + livroId] = dadosLivro;
+  for (let i = 0; i < qtd; i++) {
+    const codigo = await proximoCodigoExemplar();
+    const exId = db.ref('exemplares').push().key;
+    updates['exemplares/' + exId] = {
+      livro_id: livroId,
+      codigo: codigo,
+      rua_id: rua_id,
+      prateleira_id: prateleira_id,
+      status: 'Disponível',
+      criado_em: Date.now()
+    };
+  }
+  await db.ref().update(updates);
+  return livroId;
+}
+
+async function adicionarExemplaresAoLivro(livroId, rua_id, prateleira_id, qtd) {
+  const updates = {};
+  for (let i = 0; i < qtd; i++) {
+    const codigo = await proximoCodigoExemplar();
+    const exId = db.ref('exemplares').push().key;
+    updates['exemplares/' + exId] = {
+      livro_id: livroId,
+      codigo: codigo,
+      rua_id: rua_id,
+      prateleira_id: prateleira_id,
+      status: 'Disponível',
+      criado_em: Date.now()
+    };
+  }
+  await db.ref().update(updates);
 }
 
 // ================= Importação por planilha =================
@@ -1229,6 +1518,7 @@ async function processarPlanilha(file) {
 
   importStatus.textContent = 'Importando 0 de ' + linhas.length + '…';
   let sucesso = 0;
+  let mesclados = 0;
   const erros = [];
 
   for (let i = 0; i < linhas.length; i++) {
@@ -1261,32 +1551,28 @@ async function processarPlanilha(file) {
       continue;
     }
 
+    const isbn = String(linha['ISBN'] || '').trim();
+
     try {
-      const livroRef = await db.ref('livros').push({
-        titulo: titulo,
-        autores: autores,
-        editora: editora,
-        ano: String(linha['Ano'] || '').trim(),
-        isbn: String(linha['ISBN'] || '').trim(),
-        tipo: String(linha['Tipo de material*'] || linha['Tipo de material'] || 'Livro').trim() || 'Livro',
-        categoria: categoria,
-        cdd_cdu: String(linha['CDD/CDU'] || '').trim(),
-        eixo_tecnico: String(linha['Eixo técnico'] || '').trim(),
-        sinopse: String(linha['Sinopse'] || '').trim(),
-        capa_url: '',
-        criado_em: Date.now()
-      });
-      const livroId = livroRef.key;
-      for (let n = 0; n < qtd; n++) {
-        const codigo = await proximoCodigoExemplar();
-        await db.ref('exemplares').push({
-          livro_id: livroId,
-          codigo: codigo,
-          rua_id: rua_id,
-          prateleira_id: prateleiraEntry[0],
-          status: 'Disponível',
+      const existente = isbn ? encontrarLivroExistentePorISBN(isbn) : null;
+      if (existente) {
+        await adicionarExemplaresAoLivro(existente.id, rua_id, prateleiraEntry[0], qtd);
+        mesclados++;
+      } else {
+        await criarLivroComExemplares({
+          titulo: titulo,
+          autores: autores,
+          editora: editora,
+          ano: String(linha['Ano'] || '').trim(),
+          isbn: isbn,
+          tipo: String(linha['Tipo de material*'] || linha['Tipo de material'] || 'Livro').trim() || 'Livro',
+          categoria: categoria,
+          cdd_cdu: String(linha['CDD/CDU'] || '').trim(),
+          eixo_tecnico: String(linha['Eixo técnico'] || '').trim(),
+          sinopse: String(linha['Sinopse'] || '').trim(),
+          capa_url: '',
           criado_em: Date.now()
-        });
+        }, rua_id, prateleiraEntry[0], qtd);
       }
       sucesso++;
     } catch (err) {
@@ -1294,7 +1580,7 @@ async function processarPlanilha(file) {
     }
   }
 
-  let resumo = sucesso + ' de ' + linhas.length + ' título(s) importado(s) com sucesso.';
+  let resumo = sucesso + ' de ' + linhas.length + ' linha(s) processada(s) com sucesso' + (mesclados > 0 ? ' (' + mesclados + ' mesclada(s) a título já existente pelo ISBN)' : '') + '.';
   if (erros.length > 0) resumo += '\n\n' + erros.join('\n');
   importStatus.textContent = resumo;
 }
@@ -1400,26 +1686,27 @@ function renderAcervo() {
 let editandoLivroId = null;
 
 function abrirEdicaoLivro(livroId) {
-  if (!verificarAdmin()) return;
-  const livro = livrosCache[livroId];
-  if (!livro) return;
-  editandoLivroId = livroId;
-  document.getElementById('edit-titulo').value = livro.titulo || '';
-  document.getElementById('edit-autores').value = livro.autores || '';
-  document.getElementById('edit-editora').value = livro.editora || '';
-  document.getElementById('edit-ano').value = livro.ano || '';
-  document.getElementById('edit-isbn').value = livro.isbn || '';
-  document.getElementById('edit-tipo').value = livro.tipo || 'Livro';
-  document.getElementById('edit-categoria').value = livro.categoria || '';
-  document.getElementById('edit-cdd').value = livro.cdd_cdu || '';
-  document.getElementById('edit-eixo').value = livro.eixo_tecnico || '';
-  document.getElementById('edit-sinopse').value = livro.sinopse || '';
-  document.getElementById('edit-capa').value = livro.capa_url || '';
-  document.getElementById('edit-add-qtd').value = 1;
-  document.getElementById('edit-mover-todos-rua').value = '';
-  renderRuasSelects();
-  renderExemplaresDoLivroEdicao(livroId);
-  document.getElementById('edit-modal').hidden = false;
+  exigirAdmin(function () {
+    const livro = livrosCache[livroId];
+    if (!livro) return;
+    editandoLivroId = livroId;
+    document.getElementById('edit-titulo').value = livro.titulo || '';
+    document.getElementById('edit-autores').value = livro.autores || '';
+    document.getElementById('edit-editora').value = livro.editora || '';
+    document.getElementById('edit-ano').value = livro.ano || '';
+    document.getElementById('edit-isbn').value = livro.isbn || '';
+    document.getElementById('edit-tipo').value = livro.tipo || 'Livro';
+    document.getElementById('edit-categoria').value = livro.categoria || '';
+    document.getElementById('edit-cdd').value = livro.cdd_cdu || '';
+    document.getElementById('edit-eixo').value = livro.eixo_tecnico || '';
+    document.getElementById('edit-sinopse').value = livro.sinopse || '';
+    document.getElementById('edit-capa').value = livro.capa_url || '';
+    document.getElementById('edit-add-qtd').value = 1;
+    document.getElementById('edit-mover-todos-rua').value = '';
+    renderRuasSelects();
+    renderExemplaresDoLivroEdicao(livroId);
+    document.getElementById('edit-modal').hidden = false;
+  });
 }
 
 function popularPrateleirasEmSelect(ruaId, selectEl) {
@@ -1473,6 +1760,7 @@ function renderExemplaresDoLivroEdicao(livroId) {
       const novaRua = selRua.value;
       const novaPrateleira = selPrat.value;
       if (!novaRua || !novaPrateleira) { alert('Selecione a rua e a prateleira de destino.'); return; }
+      if (!confirm('Mover o exemplar ' + ex.codigo + ' para esse endereço?')) return;
       try {
         await db.ref('exemplares/' + exId).update({ rua_id: novaRua, prateleira_id: novaPrateleira });
         row.classList.add('edit-exemplar-movido');
@@ -1493,6 +1781,7 @@ document.getElementById('btn-mover-todos-exemplares').addEventListener('click', 
   if (!novaRua || !novaPrateleira) { alert('Selecione a rua e a prateleira de destino.'); return; }
   const exemplares = Object.entries(exemplaresCache).filter(function (e) { return e[1].livro_id === editandoLivroId; });
   if (exemplares.length === 0) return;
+  if (!confirm('Mover ' + exemplares.length + ' exemplar(es) deste título para esse endereço?')) return;
   const updates = {};
   exemplares.forEach(function (e) {
     updates['exemplares/' + e[0] + '/rua_id'] = novaRua;
@@ -1564,17 +1853,7 @@ document.getElementById('btn-adicionar-exemplares-edicao').addEventListener('cli
   btnAdd.disabled = true;
   btnAdd.textContent = 'Adicionando…';
   try {
-    for (let i = 0; i < qtd; i++) {
-      const codigo = await proximoCodigoExemplar();
-      await db.ref('exemplares').push({
-        livro_id: editandoLivroId,
-        codigo: codigo,
-        rua_id: rua_id,
-        prateleira_id: prateleira_id,
-        status: 'Disponível',
-        criado_em: Date.now()
-      });
-    }
+    await adicionarExemplaresAoLivro(editandoLivroId, rua_id, prateleira_id, qtd);
     document.getElementById('edit-add-qtd').value = 1;
     renderExemplaresDoLivroEdicao(editandoLivroId);
     alert(qtd + ' exemplar(es) adicionado(s) a este título.');
@@ -1587,36 +1866,38 @@ document.getElementById('btn-adicionar-exemplares-edicao').addEventListener('cli
   }
 });
 
-async function excluirLivro(livroId) {
-  if (!verificarAdmin()) return;
-  if (!db) { firebaseIndisponivel(); return; }
-  const livro = livrosCache[livroId];
-  const titulo = livro ? livro.titulo : 'este título';
-  const qtdExemplares = Object.values(exemplaresCache).filter(function (ex) { return ex.livro_id === livroId; }).length;
-  if (!confirm('Excluir "' + titulo + '" e ' + qtdExemplares + ' exemplar(es) vinculado(s)? Essa ação não pode ser desfeita.')) return;
-  try {
-    const updates = {};
-    updates['livros/' + livroId] = null;
-    Object.entries(exemplaresCache).forEach(function (entry) {
-      if (entry[1].livro_id === livroId) updates['exemplares/' + entry[0]] = null;
-    });
-    await db.ref().update(updates);
-  } catch (err) {
-    console.error(err);
-    alert('Erro ao excluir.');
-  }
+function excluirLivro(livroId) {
+  exigirAdmin(async function () {
+    if (!db) { firebaseIndisponivel(); return; }
+    const livro = livrosCache[livroId];
+    const titulo = livro ? livro.titulo : 'este título';
+    const qtdExemplares = Object.values(exemplaresCache).filter(function (ex) { return ex.livro_id === livroId; }).length;
+    if (!confirm('Excluir "' + titulo + '" e ' + qtdExemplares + ' exemplar(es) vinculado(s)? Essa ação não pode ser desfeita.')) return;
+    try {
+      const updates = {};
+      updates['livros/' + livroId] = null;
+      Object.entries(exemplaresCache).forEach(function (entry) {
+        if (entry[1].livro_id === livroId) updates['exemplares/' + entry[0]] = null;
+      });
+      await db.ref().update(updates);
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir.');
+    }
+  });
 }
 
-async function excluirExemplar(exemplarId) {
-  if (!verificarAdmin()) return;
-  if (!db) { firebaseIndisponivel(); return; }
-  if (!confirm('Excluir este exemplar? Essa ação não pode ser desfeita.')) return;
-  try {
-    await db.ref('exemplares/' + exemplarId).remove();
-  } catch (err) {
-    console.error(err);
-    alert('Erro ao excluir exemplar.');
-  }
+function excluirExemplar(exemplarId) {
+  exigirAdmin(async function () {
+    if (!db) { firebaseIndisponivel(); return; }
+    if (!confirm('Excluir este exemplar? Essa ação não pode ser desfeita.')) return;
+    try {
+      await db.ref('exemplares/' + exemplarId).remove();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir exemplar.');
+    }
+  });
 }
 
 // ================= Impressão de etiquetas =================
@@ -1767,6 +2048,142 @@ document.getElementById('dash-emprestados').addEventListener('click', function (
 document.getElementById('dash-etiquetas-pendentes').addEventListener('click', function () {
   document.querySelector('.tab[data-tab="etiquetas"]').click();
   document.getElementById('btn-selecionar-novos').click();
+});
+
+// ================= Leitores =================
+document.getElementById('btn-add-leitor').addEventListener('click', function () {
+  if (!db) { firebaseIndisponivel(); return; }
+  const nome = document.getElementById('leitor-nome').value.trim();
+  const matricula = document.getElementById('leitor-matricula').value.trim();
+  if (!nome || !matricula) { alert('Preencha nome e matrícula.'); return; }
+  const jaExiste = Object.values(leitoresCache).some(function (l) { return (l.matricula || '').trim().toLowerCase() === matricula.toLowerCase(); });
+  if (jaExiste) { alert('Já existe um leitor com essa matrícula.'); return; }
+  db.ref('leitores').push({
+    nome: nome,
+    matricula: matricula,
+    tipo: document.getElementById('leitor-tipo').value,
+    turma: document.getElementById('leitor-turma').value.trim(),
+    contato: document.getElementById('leitor-contato').value.trim(),
+    situacao: 'Ativo',
+    criado_em: Date.now()
+  });
+  document.getElementById('leitor-nome').value = '';
+  document.getElementById('leitor-matricula').value = '';
+  document.getElementById('leitor-turma').value = '';
+  document.getElementById('leitor-contato').value = '';
+});
+
+document.getElementById('leitor-busca').addEventListener('input', renderLeitoresLista);
+
+function renderLeitoresLista() {
+  const cont = document.getElementById('leitores-lista');
+  if (!cont) return;
+  const termo = document.getElementById('leitor-busca').value.trim().toLowerCase();
+  const entradas = Object.entries(leitoresCache).sort(function (a, b) { return (a[1].nome || '').localeCompare(b[1].nome || ''); });
+  const filtrados = entradas.filter(function (entry) {
+    if (!termo) return true;
+    const l = entry[1];
+    return (l.nome || '').toLowerCase().includes(termo) || (l.matricula || '').toLowerCase().includes(termo);
+  });
+  if (filtrados.length === 0) {
+    cont.innerHTML = '<p class="empty">' + (entradas.length === 0 ? 'Nenhum leitor cadastrado ainda.' : 'Nenhum resultado para essa busca.') + '</p>';
+    return;
+  }
+  cont.innerHTML = filtrados.map(function (entry) {
+    const id = entry[0], l = entry[1];
+    return '<div class="leitor-row">' +
+      '<div class="leitor-info"><strong>' + escapeHtml(l.nome) + '</strong>' +
+      '<span class="leitor-meta">' + escapeHtml(l.matricula || '') + ' · ' + escapeHtml(l.tipo || '') + (l.turma ? ' · ' + escapeHtml(l.turma) : '') + '</span></div>' +
+      '<span class="status status-' + slug(l.situacao || 'Ativo') + '">' + escapeHtml(l.situacao || 'Ativo') + '</span>' +
+      '<div class="livro-actions">' +
+      '<button type="button" class="btn-acao btn-editar-leitor" data-id="' + id + '">Editar</button>' +
+      '<button type="button" class="btn-acao btn-excluir-leitor" data-id="' + id + '">Excluir</button>' +
+      '</div></div>';
+  }).join('');
+  cont.querySelectorAll('.btn-editar-leitor').forEach(function (btn) {
+    btn.addEventListener('click', function () { abrirEdicaoLeitor(btn.dataset.id); });
+  });
+  cont.querySelectorAll('.btn-excluir-leitor').forEach(function (btn) {
+    btn.addEventListener('click', function () { excluirLeitor(btn.dataset.id); });
+  });
+}
+
+let editandoLeitorId = null;
+
+function abrirEdicaoLeitor(id) {
+  exigirAdmin(function () {
+    const l = leitoresCache[id];
+    if (!l) return;
+    editandoLeitorId = id;
+    document.getElementById('edit-leitor-nome').value = l.nome || '';
+    document.getElementById('edit-leitor-matricula').value = l.matricula || '';
+    document.getElementById('edit-leitor-tipo').value = l.tipo || 'Aluno';
+    document.getElementById('edit-leitor-turma').value = l.turma || '';
+    document.getElementById('edit-leitor-contato').value = l.contato || '';
+    document.getElementById('edit-leitor-situacao').value = l.situacao || 'Ativo';
+    document.getElementById('edit-leitor-modal').hidden = false;
+  });
+}
+
+document.getElementById('btn-cancelar-edicao-leitor').addEventListener('click', function () {
+  document.getElementById('edit-leitor-modal').hidden = true;
+  editandoLeitorId = null;
+});
+
+document.getElementById('btn-salvar-edicao-leitor').addEventListener('click', async function () {
+  if (!editandoLeitorId) return;
+  if (!db) { firebaseIndisponivel(); return; }
+  const nome = document.getElementById('edit-leitor-nome').value.trim();
+  const matricula = document.getElementById('edit-leitor-matricula').value.trim();
+  if (!nome || !matricula) { alert('Preencha nome e matrícula.'); return; }
+  const duplicada = Object.entries(leitoresCache).some(function (e) { return e[0] !== editandoLeitorId && (e[1].matricula || '').trim().toLowerCase() === matricula.toLowerCase(); });
+  if (duplicada) { alert('Já existe outro leitor com essa matrícula.'); return; }
+  try {
+    await db.ref('leitores/' + editandoLeitorId).update({
+      nome: nome,
+      matricula: matricula,
+      tipo: document.getElementById('edit-leitor-tipo').value,
+      turma: document.getElementById('edit-leitor-turma').value.trim(),
+      contato: document.getElementById('edit-leitor-contato').value.trim(),
+      situacao: document.getElementById('edit-leitor-situacao').value
+    });
+    document.getElementById('edit-leitor-modal').hidden = true;
+    editandoLeitorId = null;
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao salvar leitor.');
+  }
+});
+
+function excluirLeitor(id) {
+  exigirAdmin(async function () {
+    if (!db) { firebaseIndisponivel(); return; }
+    const l = leitoresCache[id];
+    if (!confirm('Excluir o leitor "' + (l ? l.nome : '') + '"?')) return;
+    try {
+      await db.ref('leitores/' + id).remove();
+    } catch (err) {
+      console.error(err);
+      alert('Erro ao excluir leitor.');
+    }
+  });
+}
+
+// ================= Backup / exportação =================
+document.getElementById('btn-exportar-backup').addEventListener('click', function () {
+  const wb = XLSX.utils.book_new();
+  function adicionarAba(cache, nomeAba) {
+    const linhas = Object.entries(cache).map(function (e) { return Object.assign({ id: e[0] }, e[1]); });
+    const ws = XLSX.utils.json_to_sheet(linhas.length ? linhas : [{}]);
+    XLSX.utils.book_append_sheet(wb, ws, nomeAba);
+  }
+  adicionarAba(livrosCache, 'Livros');
+  adicionarAba(exemplaresCache, 'Exemplares');
+  adicionarAba(ruasCache, 'Ruas');
+  adicionarAba(prateleirasCache, 'Prateleiras');
+  adicionarAba(leitoresCache, 'Leitores');
+  const dataHoje = new Date().toISOString().slice(0, 10);
+  XLSX.writeFile(wb, 'backup_lpcteca_' + dataHoje + '.xlsx');
 });
 
 function slug(s) {
