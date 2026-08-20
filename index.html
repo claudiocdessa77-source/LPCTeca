@@ -329,10 +329,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   <div class="gate-card">
     <div class="gate-stamp">LPCTeca</div>
     <p class="gate-sub">CENTRO ESTADUAL DE EDUCAÇÃO PROFISSIONAL<br>LUIS PINTO DE CARVALHO</p>
-    <label for="gate-pass">Senha de acesso</label>
-    <input id="gate-pass" type="password" placeholder="Senha" />
+    <label for="gate-email">E-mail</label>
+    <input id="gate-email" type="email" placeholder="seu@email.com" autocomplete="username" />
+    <label for="gate-senha">Senha</label>
+    <input id="gate-senha" type="password" placeholder="Senha" autocomplete="current-password" />
     <button id="gate-btn" class="btn btn-primary btn-block">Entrar</button>
-    <p id="gate-err" class="gate-err" hidden>Senha incorreta. Tente novamente.</p>
+    <p id="gate-err" class="gate-err" hidden>E-mail ou senha incorretos.</p>
   </div>
 </div>
 
@@ -729,8 +731,7 @@ document.querySelectorAll('.tab').forEach(function (btn) {
   });
 });
 
-// ================= Senha de acesso (não depende do Firebase) =================
-const SENHA = "lpc123";
+// ================= Acesso ao sistema =================
 let acaoAdminPendente = null;
 
 function usuarioEhAdmin() {
@@ -776,20 +777,26 @@ document.getElementById('admin-senha').addEventListener('keydown', function (e) 
   if (e.key === 'Enter') document.getElementById('btn-entrar-admin').click();
 });
 
-const gate = document.getElementById('gate');
-const app = document.getElementById('app');
 document.getElementById('gate-btn').addEventListener('click', tentarEntrar);
-document.getElementById('gate-pass').addEventListener('keydown', function (e) {
+document.getElementById('gate-senha').addEventListener('keydown', function (e) {
   if (e.key === 'Enter') tentarEntrar();
 });
-function tentarEntrar() {
-  const val = document.getElementById('gate-pass').value;
-  if (val === SENHA) {
-    gate.hidden = true;
-    app.hidden = false;
-    document.getElementById('scan-input').focus();
-  } else {
+async function tentarEntrar() {
+  if (!auth) { firebaseIndisponivel(); return; }
+  const email = document.getElementById('gate-email').value.trim();
+  const senha = document.getElementById('gate-senha').value;
+  document.getElementById('gate-err').hidden = true;
+  const btn = document.getElementById('gate-btn');
+  btn.disabled = true;
+  btn.textContent = 'Entrando…';
+  try {
+    await auth.signInWithEmailAndPassword(email, senha);
+  } catch (err) {
+    console.error(err);
     document.getElementById('gate-err').hidden = false;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Entrar';
   }
 }
 
@@ -854,16 +861,18 @@ try {
   auth = firebase.auth();
   db = firebase.database();
 
-  auth.signInAnonymously().catch(function (e) {
-    console.error('Falha na autenticação anônima', e);
-    connEl.textContent = 'erro de conexão';
-  });
-
   auth.onAuthStateChanged(function (user) {
     connEl.textContent = user ? 'conectado' : 'desconectado';
-    if (user && !listenersAttached) {
-      listenersAttached = true;
-      attachListeners();
+    if (user) {
+      document.getElementById('gate').hidden = true;
+      document.getElementById('app').hidden = false;
+      if (!listenersAttached) {
+        listenersAttached = true;
+        attachListeners();
+      }
+    } else {
+      document.getElementById('gate').hidden = false;
+      document.getElementById('app').hidden = true;
     }
   });
 } catch (err) {
