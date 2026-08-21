@@ -708,6 +708,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           </div>
           <div id="emp-exemplar-status" class="scan-status"></div>
         </div>
+        <input id="emp-busca-titulo" class="search" placeholder="ou busque por título ou autor…" style="margin:14px 0;" />
+        <div id="emp-busca-resultados"></div>
         <div id="emp-lista-sessao" class="etq-lista"></div>
         <div class="form-actions" style="margin-top:14px;">
           <button type="button" id="btn-finalizar-atendimento" class="btn btn-primary">Finalizar atendimento</button>
@@ -3194,17 +3196,21 @@ async function processarEmprestimoExemplar(valor) {
 
   const entry = encontrarExemplarPorEntrada(codigo);
   if (!entry) { statusEl.textContent = 'Exemplar "' + codigo + '" não encontrado.'; inputEl.focus(); return; }
-  const exemplarId = entry[0], exemplar = entry[1];
+  await registrarEmprestimoDeExemplar(entry[0], entry[1]);
+  inputEl.focus();
+}
+
+async function registrarEmprestimoDeExemplar(exemplarId, exemplar) {
+  const statusEl = document.getElementById('emp-exemplar-status');
+  if (!leitorEmAtendimento) return;
 
   if (exemplar.status !== 'Disponível') {
     statusEl.textContent = 'Exemplar ' + exemplar.codigo + ' está "' + exemplar.status + '" — não pode ser emprestado agora.';
-    inputEl.focus();
     return;
   }
   const usados = contarEmprestimosAtivosDoLeitor(leitorEmAtendimento.id);
   if (usados >= leitorEmAtendimento.limite) {
     statusEl.textContent = leitorEmAtendimento.dados.nome + ' atingiu o limite de ' + leitorEmAtendimento.limite + ' empréstimo(s) simultâneo(s).';
-    inputEl.focus();
     return;
   }
   if (!db) { firebaseIndisponivel(); return; }
@@ -3238,8 +3244,40 @@ async function processarEmprestimoExemplar(valor) {
     console.error(err);
     statusEl.textContent = 'Erro ao registrar empréstimo.';
   }
-  inputEl.focus();
 }
+
+document.getElementById('emp-busca-titulo').addEventListener('input', function () {
+  const termo = this.value.trim().toLowerCase();
+  const cont = document.getElementById('emp-busca-resultados');
+  if (termo.length < 2) { cont.innerHTML = ''; return; }
+  const livrosCorrespondentes = Object.entries(livrosCache).filter(function (e) {
+    return (e[1].titulo || '').toLowerCase().includes(termo) || (e[1].autores || '').toLowerCase().includes(termo);
+  }).slice(0, 8);
+  if (livrosCorrespondentes.length === 0) {
+    cont.innerHTML = '<p class="empty">Nenhum título encontrado.</p>';
+    return;
+  }
+  cont.innerHTML = livrosCorrespondentes.map(function (le) {
+    const livroId = le[0], livro = le[1];
+    const disponiveis = Object.entries(exemplaresCache).filter(function (ex) { return ex[1].livro_id === livroId && ex[1].status === 'Disponível'; });
+    if (disponiveis.length === 0) {
+      return '<div class="leitor-row"><div class="leitor-info"><strong>' + escapeHtml(livro.titulo) + '</strong>' +
+        '<span class="leitor-meta">' + escapeHtml(livro.autores || '') + ' · sem exemplar disponível</span></div></div>';
+    }
+    return disponiveis.map(function (de) {
+      return '<div class="leitor-row"><div class="leitor-info"><strong>' + escapeHtml(livro.titulo) + '</strong>' +
+        '<span class="leitor-meta">' + escapeHtml(livro.autores || '') + ' · ' + escapeHtml(de[1].codigo) + '</span></div>' +
+        '<button type="button" class="btn-acao btn-selecionar-exemplar-busca" data-id="' + de[0] + '">Emprestar</button></div>';
+    }).join('');
+  }).join('');
+  cont.querySelectorAll('.btn-selecionar-exemplar-busca').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      await registrarEmprestimoDeExemplar(btn.dataset.id, exemplaresCache[btn.dataset.id]);
+      document.getElementById('emp-busca-titulo').value = '';
+      cont.innerHTML = '';
+    });
+  });
+});
 
 function renderListaSessaoEmprestimo() {
   const cont = document.getElementById('emp-lista-sessao');
