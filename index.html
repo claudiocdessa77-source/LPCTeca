@@ -312,33 +312,33 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
   body.print-cartoes * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body.print-cartoes #cartoes-folha, body.print-cartoes #cartoes-folha * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-  body.print-cartoes #cartoes-folha { display: grid; position: absolute; top: 0; left: 0; grid-template-columns: repeat(2, 85.6mm); grid-auto-rows: 53.98mm; }
+  body.print-cartoes #cartoes-folha { display: grid; position: absolute; top: 0; left: 0; grid-template-columns: repeat(2, 85mm); grid-auto-rows: 120mm; justify-content: center; }
 
   @page { margin: 0; }
 }
 
-/* Cartão do leitor */
+/* Cartão do leitor — tamanho real da CNH aberta (85 x 120mm) */
 .cartao-leitor-item {
-  width: 85.6mm; height: 53.98mm; box-sizing: border-box; border-radius: 3mm; overflow: hidden;
-  background: linear-gradient(135deg, var(--ink) 0%, #24384f 100%); color: #fff; position: relative;
-  font-family: 'Inter', sans-serif; padding: 5mm; display: flex; flex-direction: column; justify-content: space-between;
+  width: 85mm; height: 120mm; box-sizing: border-box; border-radius: 4mm; overflow: hidden;
+  background: linear-gradient(160deg, var(--ink) 0%, #24384f 100%); color: #fff; position: relative;
+  font-family: 'Inter', sans-serif; padding: 7mm; display: flex; flex-direction: column; justify-content: space-between;
 }
-.cartao-leitor-topo { display: flex; justify-content: space-between; align-items: flex-start; }
+.cartao-leitor-topo { display: flex; flex-direction: column; gap: 1mm; }
 .cartao-leitor-logo {
-  font-family: 'Fraunces', serif; font-weight: 700; font-size: 13pt; border: 1.2pt solid var(--accent);
-  border-radius: 2mm; padding: 1mm 3mm; color: var(--accent); transform: rotate(-2deg); display: inline-block;
+  font-family: 'Fraunces', serif; font-weight: 700; font-size: 19pt; border: 1.4pt solid var(--accent);
+  border-radius: 2.5mm; padding: 1.5mm 4mm; color: var(--accent); transform: rotate(-2deg); display: inline-block; align-self: flex-start;
 }
-.cartao-leitor-tipo { font-family: 'IBM Plex Mono', monospace; font-size: 7pt; letter-spacing: .05em; text-transform: uppercase; opacity: .85; text-align: right; }
-.cartao-leitor-nome { font-size: 12pt; font-weight: 700; margin-top: 2mm; line-height: 1.2; }
-.cartao-leitor-sub { font-family: 'IBM Plex Mono', monospace; font-size: 7pt; opacity: .8; margin-top: 1mm; }
-.cartao-leitor-barcode { background: #fff; border-radius: 1.5mm; padding: 2mm; margin-top: 2mm; text-align: center; }
-.cartao-leitor-barcode svg { width: 100%; height: 11mm; }
+.cartao-leitor-titulo-doc { font-family: 'IBM Plex Mono', monospace; font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; opacity: .75; margin-top: 2mm; }
+.cartao-leitor-corpo { margin-top: 5mm; }
+.cartao-leitor-nome { font-size: 15pt; font-weight: 700; line-height: 1.2; margin-bottom: 5mm; }
+.cartao-leitor-linha-info { display: flex; justify-content: space-between; align-items: baseline; font-size: 9.5pt; padding: 2mm 0; border-bottom: 1px solid rgba(255,255,255,.18); }
+.cartao-leitor-rotulo { font-family: 'IBM Plex Mono', monospace; font-size: 7pt; text-transform: uppercase; letter-spacing: .04em; opacity: .65; }
+.cartao-leitor-barcode { background: #fff; border-radius: 2mm; padding: 3mm; margin-top: 5mm; text-align: center; }
+.cartao-leitor-barcode svg { width: 100%; height: 16mm; }
 
 /* Folha com vários cartões, para corte */
-.cartoes-folha-celula { width: 85.6mm; height: 53.98mm; box-sizing: border-box; border: 1px dashed #999; padding: 1.2mm; }
-.cartoes-folha-celula .cartao-leitor-item { width: 100%; height: 100%; padding: 4mm; }
-.cartoes-folha-celula .cartao-leitor-nome { font-size: 10pt; }
-.cartoes-folha-celula .cartao-leitor-logo { font-size: 11pt; }
+.cartoes-folha-celula { width: 85mm; height: 120mm; box-sizing: border-box; border: 1px dashed #999; padding: 1.5mm; }
+.cartoes-folha-celula .cartao-leitor-item { width: 100%; height: 100%; }
 
 .etq-item {
   width: 38.1mm; height: 21.2mm; box-sizing: border-box; padding: 1mm;
@@ -653,7 +653,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <span id="leitores-contagem" class="etq-contagem">0 selecionado(s)</span>
         <button type="button" id="btn-imprimir-cartoes-selecionados" class="btn btn-primary">Imprimir cartões selecionados</button>
       </div>
-      <p class="etq-ajuda">Cartões saem numa folha A4, 2 colunas × 5 linhas (10 por folha), com linha tracejada indicando onde cortar.</p>
+      <p class="etq-ajuda">Cartões saem no tamanho real da CNH aberta (85 × 120mm), 2 colunas × 2 linhas — 4 por folha A4 — com linha tracejada indicando onde cortar.</p>
       <div id="leitores-lista"></div>
     </section>
 
@@ -2865,19 +2865,26 @@ document.getElementById('btn-imprimir-cartao-leitor').addEventListener('click', 
   imprimirCartaoLeitor(editandoLeitorId);
 });
 
+function gerarCartaoLeitorHtml(l, svgAttrs) {
+  return '<div class="cartao-leitor-item">' +
+    '<div class="cartao-leitor-topo"><span class="cartao-leitor-logo">LPCTeca</span><span class="cartao-leitor-titulo-doc">CARTEIRA DE LEITOR</span></div>' +
+    '<div class="cartao-leitor-corpo">' +
+    '<div class="cartao-leitor-nome">' + escapeHtml(l.nome) + '</div>' +
+    '<div class="cartao-leitor-linha-info"><span class="cartao-leitor-rotulo">Tipo</span><span>' + escapeHtml(l.tipo || '—') + '</span></div>' +
+    '<div class="cartao-leitor-linha-info"><span class="cartao-leitor-rotulo">Curso/Turma</span><span>' + escapeHtml(nomeCursoTurma(l) || '—') + '</span></div>' +
+    '<div class="cartao-leitor-linha-info"><span class="cartao-leitor-rotulo">Matrícula</span><span class="mono">' + escapeHtml(l.matricula || '') + '</span></div>' +
+    '</div>' +
+    '<div class="cartao-leitor-barcode"><svg ' + svgAttrs + '></svg></div>' +
+    '</div>';
+}
+
 function imprimirCartaoLeitor(leitorId) {
   const l = leitoresCache[leitorId];
   if (!l) return;
   const cont = document.getElementById('cartao-leitor');
-  cont.innerHTML =
-    '<div class="cartao-leitor-item">' +
-    '<div class="cartao-leitor-topo"><span class="cartao-leitor-logo">LPCTeca</span><span class="cartao-leitor-tipo">' + escapeHtml(l.tipo || '') + '<br>Carteira de leitor</span></div>' +
-    '<div><div class="cartao-leitor-nome">' + escapeHtml(l.nome) + '</div>' +
-    '<div class="cartao-leitor-sub">Mat. ' + escapeHtml(l.matricula || '') + (nomeCursoTurma(l) ? ' · ' + escapeHtml(nomeCursoTurma(l)) : '') + '</div>' +
-    '<div class="cartao-leitor-barcode"><svg id="cartao-leitor-barcode-svg"></svg></div></div>' +
-    '</div>';
+  cont.innerHTML = gerarCartaoLeitorHtml(l, 'id="cartao-leitor-barcode-svg"');
   try {
-    JsBarcode('#cartao-leitor-barcode-svg', l.matricula || '', { format: 'CODE128', height: 30, margin: 0, fontSize: 11 });
+    JsBarcode('#cartao-leitor-barcode-svg', l.matricula || '', { format: 'CODE128', height: 42, margin: 0, fontSize: 12 });
   } catch (e) { /* ignora */ }
   document.body.classList.add('print-cartao');
   window.print();
@@ -2906,17 +2913,12 @@ document.getElementById('btn-imprimir-cartoes-selecionados').addEventListener('c
   cont.innerHTML = ids.map(function (id) {
     const l = leitoresCache[id];
     if (!l) return '';
-    return '<div class="cartoes-folha-celula"><div class="cartao-leitor-item">' +
-      '<div class="cartao-leitor-topo"><span class="cartao-leitor-logo">LPCTeca</span><span class="cartao-leitor-tipo">' + escapeHtml(l.tipo || '') + '<br>Carteira de leitor</span></div>' +
-      '<div><div class="cartao-leitor-nome">' + escapeHtml(l.nome) + '</div>' +
-      '<div class="cartao-leitor-sub">Mat. ' + escapeHtml(l.matricula || '') + (nomeCursoTurma(l) ? ' · ' + escapeHtml(nomeCursoTurma(l)) : '') + '</div>' +
-      '<div class="cartao-leitor-barcode"><svg class="cartoes-folha-barcode" data-code="' + escapeHtml(l.matricula || '') + '"></svg></div></div>' +
-      '</div></div>';
+    return '<div class="cartoes-folha-celula">' + gerarCartaoLeitorHtml(l, 'class="cartoes-folha-barcode" data-code="' + escapeHtml(l.matricula || '') + '"') + '</div>';
   }).join('');
 
   cont.querySelectorAll('.cartoes-folha-barcode').forEach(function (svg) {
     try {
-      JsBarcode(svg, svg.dataset.code, { format: 'CODE128', height: 26, margin: 0, fontSize: 9 });
+      JsBarcode(svg, svg.dataset.code, { format: 'CODE128', height: 42, margin: 0, fontSize: 12 });
     } catch (e) { /* ignora */ }
   });
 
