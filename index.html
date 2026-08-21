@@ -764,7 +764,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <div class="field field-wide">
             <label>Matrícula do leitor</label>
             <div class="scan-row">
-              <input id="reserva-leitor-matricula" class="mono" placeholder="Digite ou escaneie e pressione Enter" />
+              <input id="reserva-leitor-matricula" class="mono" placeholder="Matrícula, CPF ou nome — pressione Enter" />
               <button type="button" id="btn-limpar-reserva-leitor" class="btn-clear" title="Limpar">✕</button>
             </div>
           </div>
@@ -3594,9 +3594,17 @@ document.getElementById('reserva-leitor-matricula').addEventListener('keydown', 
   if (e.key === 'Enter') {
     e.preventDefault();
     const termo = document.getElementById('reserva-leitor-matricula').value.trim();
-    const entry = Object.entries(leitoresCache).find(function (le) { return le[1].matricula === termo; });
     const info = document.getElementById('reserva-leitor-confirmado');
-    if (!entry) { info.textContent = 'Leitor não encontrado para essa matrícula.'; leitorConfirmadoReserva = null; return; }
+    if (!termo) return;
+    const termoDigitos = termo.replace(/\D/g, '');
+    const candidatos = Object.entries(leitoresCache).filter(function (le) {
+      return le[1].matricula === termo ||
+        (termoDigitos.length >= 11 && (le[1].cpf || '').replace(/\D/g, '') === termoDigitos) ||
+        (termo.length >= 3 && (le[1].nome || '').toLowerCase().includes(termo.toLowerCase()));
+    });
+    if (candidatos.length === 0) { info.textContent = 'Leitor não encontrado para "' + termo + '".'; leitorConfirmadoReserva = null; return; }
+    if (candidatos.length > 1) { info.textContent = candidatos.length + ' leitores encontrados — digite a matrícula ou CPF completo para escolher um só.'; leitorConfirmadoReserva = null; return; }
+    const entry = candidatos[0];
     leitorConfirmadoReserva = { id: entry[0], dados: entry[1] };
     info.textContent = 'Leitor: ' + entry[1].nome + ' (' + entry[1].matricula + ')';
   }
@@ -3669,12 +3677,14 @@ function renderListaReservas() {
     const livro = livrosCache[r.livro_id];
     const leitor = leitoresCache[r.leitor_id];
     const disponivel = r.status === 'Disponivel';
+    const temExemplarAgora = Object.values(exemplaresCache).some(function (ex) { return ex.livro_id === r.livro_id && ex.status === 'Disponível'; });
+    const podeEfetivar = disponivel || temExemplarAgora;
     return '<div class="leitor-row">' +
       '<div class="leitor-info"><strong>' + escapeHtml(livro ? livro.titulo : '(título desconhecido)') + '</strong>' +
       '<span class="leitor-meta">' + escapeHtml(leitor ? leitor.nome : '(leitor desconhecido)') + '</span></div>' +
       '<span class="status status-' + (disponivel ? 'ativo">Pronta para retirada' : 'bloqueado">Aguardando') + '</span>' +
       '<div class="livro-actions">' +
-      (disponivel ? '<button type="button" class="btn-acao btn-retirar-reserva" data-id="' + id + '">Marcar retirado</button>' : '') +
+      (podeEfetivar ? '<button type="button" class="btn-acao btn-retirar-reserva" data-id="' + id + '">Efetivar empréstimo</button>' : '') +
       '<button type="button" class="btn-acao btn-cancelar-reserva" data-id="' + id + '">Cancelar</button>' +
       '</div></div>';
   }).join('');
@@ -3682,7 +3692,7 @@ function renderListaReservas() {
     btn.addEventListener('click', function () { cancelarReserva(btn.dataset.id); });
   });
   cont.querySelectorAll('.btn-retirar-reserva').forEach(function (btn) {
-    btn.addEventListener('click', function () { retirarReserva(btn.dataset.id); });
+    btn.addEventListener('click', function () { efetivarReserva(btn.dataset.id); });
   });
 }
 
@@ -3728,15 +3738,23 @@ async function liberarExemplarDeReserva(exemplarId, livroId) {
   await db.ref().update(updates);
 }
 
-async function retirarReserva(reservaId) {
+async function efetivarReserva(reservaId) {
   if (!db) { firebaseIndisponivel(); return; }
   const reserva = reservasCache[reservaId];
-  if (!reserva || !reserva.exemplar_id) return;
+  if (!reserva) return;
   const leitor = leitoresCache[reserva.leitor_id];
   if (leitor && (leitor.situacao || 'Ativo') !== 'Ativo') {
     alert('Leitor está "' + leitor.situacao + '" — não é possível concluir o empréstimo.');
     return;
   }
+
+  let exemplarId = reserva.exemplar_id;
+  if (!exemplarId) {
+    const disponivel = Object.entries(exemplaresCache).find(function (e) { return e[1].livro_id === reserva.livro_id && e[1].status === 'Disponível'; });
+    if (!disponivel) { alert('Não há exemplar disponível deste título no momento.'); return; }
+    exemplarId = disponivel[0];
+  }
+
   if (!confirm('Confirmar retirada e registrar o empréstimo?')) return;
   try {
     const agora = Date.now();
@@ -3744,7 +3762,7 @@ async function retirarReserva(reservaId) {
     const emprestimoId = db.ref('emprestimos').push().key;
     const updates = {};
     updates['emprestimos/' + emprestimoId] = {
-      exemplar_id: reserva.exemplar_id,
+      exemplar_id: exemplarId,
       livro_id: reserva.livro_id,
       leitor_id: reserva.leitor_id,
       data_emprestimo: agora,
@@ -3753,9 +3771,9 @@ async function retirarReserva(reservaId) {
       renovacoes: 0,
       criado_em: agora
     };
-    updates['exemplares/' + reserva.exemplar_id + '/status'] = 'Emprestado';
-    updates['exemplares/' + reserva.exemplar_id + '/emprestimo_ativo_id'] = emprestimoId;
-    updates['exemplares/' + reserva.exemplar_id + '/reserva_id'] = null;
+    updates['exemplares/' + exemplarId + '/status'] = 'Emprestado';
+    updates['exemplares/' + exemplarId + '/emprestimo_ativo_id'] = emprestimoId;
+    updates['exemplares/' + exemplarId + '/reserva_id'] = null;
     updates['reservas/' + reservaId + '/status'] = 'Retirada';
     await db.ref().update(updates);
   } catch (err) {
