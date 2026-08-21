@@ -242,6 +242,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .status-emprestado { background: var(--stamp-soft); color: var(--stamp); }
 .status-ativo { background: var(--accent-soft); color: var(--accent); }
 .status-bloqueado, .status-suspenso { background: var(--stamp-soft); color: var(--stamp); }
+.status-reservado { background: #E9E2C8; color: #8A6D1D; }
 
 /* Leitores */
 .leitor-row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); flex-wrap: wrap; }
@@ -282,12 +283,18 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .etq-linha:last-child { border-bottom: none; }
 .etq-linha span:nth-child(3) { flex: 1; }
 
-#etq-folha { display: none; }
+#etq-folha, #cupom-emprestimo { display: none; }
 @media print {
-  body * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-  #etq-folha, #etq-folha * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
-  #etq-folha { display: grid; position: absolute; top: 0; left: 0; grid-template-columns: repeat(5, 38.1mm); grid-auto-rows: 21.2mm; }
-  @page { margin: 0; size: A4; }
+  body.print-etiquetas * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+  body.print-etiquetas #etq-folha, body.print-etiquetas #etq-folha * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+  body.print-etiquetas #etq-folha { display: grid; position: absolute; top: 0; left: 0; grid-template-columns: repeat(5, 38.1mm); grid-auto-rows: 21.2mm; }
+  body.print-etiquetas { }
+
+  body.print-cupom * { visibility: hidden; }
+  body.print-cupom #cupom-emprestimo, body.print-cupom #cupom-emprestimo * { visibility: visible; }
+  body.print-cupom #cupom-emprestimo { display: block; position: absolute; top: 0; left: 0; width: 72mm; padding: 3mm; box-sizing: border-box; }
+
+  @page { margin: 0; }
 }
 .etq-item {
   width: 38.1mm; height: 21.2mm; box-sizing: border-box; padding: 1mm;
@@ -297,6 +304,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .etq-barcode { width: 34mm; height: 8mm; }
 .etq-codigo { font-size: 6.5pt; font-weight: 700; line-height: 1.2; }
 .etq-endereco { font-size: 5.5pt; line-height: 1.3; color: #fff; border-radius: 2mm; padding: 0.3mm 1.5mm; margin-top: 0.4mm; font-weight: 700; }
+
+/* Cupom de empréstimo */
+.cupom-cabecalho { text-align: center; font-weight: 700; font-size: 12pt; font-family: 'Fraunces', serif; margin-bottom: 2mm; }
+.cupom-sub { display: block; font-size: 7pt; font-weight: 400; font-family: 'IBM Plex Mono', monospace; margin-top: 1mm; }
+.cupom-linha { border-top: 1px dashed #000; margin: 2mm 0; }
+.cupom-item { margin-bottom: 2mm; font-size: 8pt; font-family: 'Inter', sans-serif; }
+.cupom-rodape { font-size: 7pt; text-align: center; margin-top: 2mm; font-family: 'IBM Plex Mono', monospace; }
+
 .soon h3 { color: var(--ink-soft); }
 
 /* Ações do acervo */
@@ -380,8 +395,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <button class="tab" data-tab="enderecos">Ruas e prateleiras</button>
     <button class="tab" data-tab="leitores">Leitores</button>
     <button class="tab" data-tab="usuarios">Usuários</button>
-    <button class="tab tab-soon" data-tab="emprestimo">Empréstimo</button>
-    <button class="tab tab-soon" data-tab="devolucao">Devolução</button>
+    <button class="tab" data-tab="emprestimo">Empréstimo</button>
+    <button class="tab" data-tab="devolucao">Devolução</button>
+    <button class="tab" data-tab="reservas">Reservas</button>
   </nav>
 
   <main class="content">
@@ -601,11 +617,79 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     </section>
 
     <section id="panel-emprestimo" class="panel">
-      <div class="soon"><h3>Empréstimo</h3><p>Módulo previsto na Fase 1 do roadmap — ainda não implementado nesta versão.</p></div>
+      <div class="scan-card">
+        <label class="scan-label" for="emp-leitor-input">Escaneie a matrícula do leitor ou digite e pressione Enter</label>
+        <div class="scan-row">
+          <input id="emp-leitor-input" class="scan-input mono" autocomplete="off" placeholder="Matrícula do leitor" />
+          <button type="button" id="btn-limpar-emp-leitor" class="btn-clear" title="Limpar">✕</button>
+        </div>
+        <div id="emp-leitor-status" class="scan-status"></div>
+      </div>
+
+      <div id="emp-leitor-card" class="found-card" hidden>
+        <div class="found-info">
+          <span class="found-source">LEITOR EM ATENDIMENTO</span>
+          <h3 id="emp-leitor-nome"></h3>
+          <p id="emp-leitor-meta"></p>
+          <p id="emp-leitor-limite" class="existing-count"></p>
+        </div>
+      </div>
+
+      <div id="emp-exemplar-area" hidden>
+        <div class="scan-card">
+          <label class="scan-label" for="emp-exemplar-input">Escaneie o código de barras de cada exemplar</label>
+          <div class="scan-row">
+            <input id="emp-exemplar-input" class="scan-input mono" autocomplete="off" placeholder="LPC000000" />
+            <button type="button" id="btn-limpar-emp-exemplar" class="btn-clear" title="Limpar">✕</button>
+          </div>
+          <div id="emp-exemplar-status" class="scan-status"></div>
+        </div>
+        <div id="emp-lista-sessao" class="etq-lista"></div>
+        <div class="form-actions" style="margin-top:14px;">
+          <button type="button" id="btn-finalizar-atendimento" class="btn btn-primary">Finalizar atendimento</button>
+        </div>
+      </div>
     </section>
+
     <section id="panel-devolucao" class="panel">
-      <div class="soon"><h3>Devolução</h3><p>Módulo previsto na Fase 1 do roadmap — ainda não implementado nesta versão.</p></div>
+      <div class="scan-card">
+        <label class="scan-label" for="dev-input">Escaneie o código de barras do exemplar devolvido</label>
+        <div class="scan-row">
+          <input id="dev-input" class="scan-input mono" autocomplete="off" placeholder="LPC000000" />
+          <button type="button" id="btn-limpar-dev" class="btn-clear" title="Limpar">✕</button>
+        </div>
+        <div id="dev-status" class="scan-status"></div>
+      </div>
+      <div id="dev-lista-sessao" class="etq-lista"></div>
+
+      <h3 style="margin-top:28px;">Empréstimos ativos</h3>
+      <input id="ativos-busca" class="search" placeholder="Buscar por título ou leitor…" style="margin-bottom:14px;" />
+      <div id="ativos-lista"></div>
     </section>
+
+    <section id="panel-reservas" class="panel">
+      <div class="card" style="margin-bottom:20px;">
+        <h3>Nova reserva</h3>
+        <div class="form-grid">
+          <div class="field field-wide"><label>Título (sem exemplar disponível)</label><select id="reserva-livro"></select></div>
+          <div class="field field-wide">
+            <label>Matrícula do leitor</label>
+            <div class="scan-row">
+              <input id="reserva-leitor-matricula" class="mono" placeholder="Digite ou escaneie e pressione Enter" />
+              <button type="button" id="btn-limpar-reserva-leitor" class="btn-clear" title="Limpar">✕</button>
+            </div>
+          </div>
+        </div>
+        <div id="reserva-leitor-confirmado" class="etq-ajuda"></div>
+        <button type="button" id="btn-criar-reserva" class="btn btn-primary btn-block">Criar reserva</button>
+        <div id="reserva-status" class="scan-status"></div>
+      </div>
+      <input id="reservas-busca" class="search" placeholder="Buscar por título…" style="margin-bottom:14px;" />
+      <div id="reservas-lista"></div>
+    </section>
+
+    <div id="cupom-emprestimo"></div>
+
     <section id="panel-dashboard" class="panel active">
       <div class="dash-topo">
         <button type="button" id="btn-exportar-backup" class="btn btn-ghost">Exportar backup completo (.xlsx)</button>
@@ -631,6 +715,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <span class="dash-numero" id="dash-etiquetas-pendentes-num">0</span>
           <span class="dash-label">Etiquetas pendentes</span>
         </button>
+        <button type="button" class="dash-card dash-card-emprestado" id="dash-atrasados-card">
+          <span class="dash-numero" id="dash-atrasados-num">0</span>
+          <span class="dash-label">Atrasados</span>
+        </button>
+        <button type="button" class="dash-card" id="dash-reservas-card">
+          <span class="dash-numero" id="dash-reservas-num">0</span>
+          <span class="dash-label">Reservas prontas</span>
+        </button>
       </div>
 
       <div class="dash-secoes">
@@ -642,6 +734,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <h3>Últimos títulos cadastrados</h3>
           <div id="dash-recentes"></div>
         </div>
+      </div>
+      <div class="dash-secao" id="dash-secao-atrasados" style="margin-top:20px;">
+        <h3>Empréstimos atrasados</h3>
+        <div id="dash-atrasados"></div>
       </div>
     </section>
 
@@ -781,6 +877,8 @@ document.querySelectorAll('.tab').forEach(function (btn) {
     if (btn.dataset.tab === 'dashboard') renderDashboard();
     if (btn.dataset.tab === 'leitores') renderLeitoresLista();
     if (btn.dataset.tab === 'usuarios') renderUsuariosLista();
+    if (btn.dataset.tab === 'devolucao') renderListaAtivos();
+    if (btn.dataset.tab === 'reservas') { renderSelectReservaLivro(); renderListaReservas(); }
   });
 });
 
@@ -885,6 +983,8 @@ let livrosCache = {};
 let exemplaresCache = {};
 let leitoresCache = {};
 let usuariosCache = {};
+let emprestimosCache = {};
+let reservasCache = {};
 const PALETA_CORES = ['#C0392B', '#D9822B', '#C9A227', '#2F6B4F', '#1F7A6C', '#2E6F9E', '#3E4C9E', '#7A4FA3', '#B0428C', '#6B4A34', '#5B6470', '#22303F'];
 let corRuaSelecionada = PALETA_CORES[0];
 let corRuaEdicaoSelecionada = PALETA_CORES[0];
@@ -985,19 +1085,37 @@ function attachListeners() {
     livrosCache = snap.val() || {};
     renderAcervo();
     renderDashboard();
+    renderSelectReservaLivro();
+    renderListaAtivos();
+    renderListaReservas();
   });
   db.ref('exemplares').on('value', function (snap) {
     exemplaresCache = snap.val() || {};
     renderAcervo();
     renderDashboard();
+    renderSelectReservaLivro();
   });
   db.ref('leitores').on('value', function (snap) {
     leitoresCache = snap.val() || {};
     renderLeitoresLista();
+    renderListaAtivos();
+    renderListaReservas();
   });
   db.ref('usuarios').on('value', function (snap) {
     usuariosCache = snap.val() || {};
     renderUsuariosLista();
+  });
+  db.ref('emprestimos').on('value', function (snap) {
+    emprestimosCache = snap.val() || {};
+    renderDashboard();
+    renderListaAtivos();
+    if (leitorEmAtendimento) atualizarContadorLimite();
+  });
+  db.ref('reservas').on('value', function (snap) {
+    reservasCache = snap.val() || {};
+    renderDashboard();
+    renderSelectReservaLivro();
+    renderListaReservas();
   });
 }
 
@@ -2140,7 +2258,9 @@ document.getElementById('btn-imprimir-etiquetas').addEventListener('click', asyn
   const selecionados = Array.from(document.querySelectorAll('.etq-check:checked')).map(function (c) { return c.value; });
   if (selecionados.length === 0) { alert('Selecione ao menos um exemplar para imprimir.'); return; }
   renderFolhaEtiquetas(selecionados);
+  document.body.classList.add('print-etiquetas');
   window.print();
+  document.body.classList.remove('print-etiquetas');
   if (db) {
     const updates = {};
     selecionados.forEach(function (exId) { updates['exemplares/' + exId + '/etiqueta_impressa'] = true; });
@@ -2190,6 +2310,28 @@ function renderDashboard() {
       return '<div class="dash-recente-item"><span>' + escapeHtml(l.titulo) + '</span><span class="dash-recente-data">' + data + '</span></div>';
     }).join('');
   }
+
+  const agora = Date.now();
+  const atrasados = Object.entries(emprestimosCache).filter(function (entry) {
+    return !entry[1].data_devolucao_real && entry[1].data_prevista_devolucao < agora;
+  });
+  document.getElementById('dash-atrasados-num').textContent = atrasados.length;
+  const contAtrasados = document.getElementById('dash-atrasados');
+  if (atrasados.length === 0) {
+    contAtrasados.innerHTML = '<p class="empty">Nenhum empréstimo atrasado.</p>';
+  } else {
+    contAtrasados.innerHTML = atrasados.map(function (entry) {
+      const emp = entry[1];
+      const leitor = leitoresCache[emp.leitor_id];
+      const livro = livrosCache[emp.livro_id];
+      const diasAtraso = Math.floor((agora - emp.data_prevista_devolucao) / 86400000);
+      return '<div class="dash-recente-item"><span><strong>' + escapeHtml(livro ? livro.titulo : '(título desconhecido)') + '</strong> — ' + escapeHtml(leitor ? leitor.nome : '(leitor desconhecido)') + '</span>' +
+        '<span class="status status-suspenso">' + diasAtraso + ' dia(s)</span></div>';
+    }).join('');
+  }
+
+  const reservasProntas = Object.values(reservasCache).filter(function (r) { return r.status === 'Disponivel'; }).length;
+  document.getElementById('dash-reservas-num').textContent = reservasProntas;
 }
 
 document.getElementById('dash-titulos').addEventListener('click', function () { irParaAcervoComFiltro(''); });
@@ -2488,6 +2630,535 @@ function carregarCapaLocalEm(imgEl, livroId) {
     }
   }).catch(function (err) { console.warn('Erro ao carregar capa local', err); });
 }
+
+// ================= Empréstimo =================
+const PRAZO_DIAS_EMPRESTIMO = 14;
+const LIMITES_POR_TIPO_LEITOR = { Aluno: 2, Professor: 5, Servidor: 3 };
+
+let leitorEmAtendimento = null;
+let emprestimosDaSessao = [];
+
+function contarEmprestimosAtivosDoLeitor(leitorId) {
+  return Object.values(emprestimosCache).filter(function (e) { return e.leitor_id === leitorId && !e.data_devolucao_real; }).length;
+}
+
+document.getElementById('emp-leitor-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); buscarLeitorParaEmprestimo(document.getElementById('emp-leitor-input').value); }
+});
+
+function buscarLeitorParaEmprestimo(valor) {
+  const termo = (valor || '').trim();
+  if (!termo) return;
+  const statusEl = document.getElementById('emp-leitor-status');
+  const entry = Object.entries(leitoresCache).find(function (e) { return e[1].matricula === termo; });
+  if (!entry) {
+    statusEl.textContent = 'Leitor não encontrado para a matrícula "' + termo + '". Confira ou cadastre-o na aba Leitores.';
+    document.getElementById('emp-leitor-input').value = '';
+    return;
+  }
+  const leitorId = entry[0], leitor = entry[1];
+  if ((leitor.situacao || 'Ativo') !== 'Ativo') {
+    statusEl.textContent = leitor.nome + ' está com situação "' + leitor.situacao + '" — empréstimo não permitido.';
+    document.getElementById('emp-leitor-input').value = '';
+    return;
+  }
+  const limite = LIMITES_POR_TIPO_LEITOR[leitor.tipo] || 2;
+  const ativosNoInicio = contarEmprestimosAtivosDoLeitor(leitorId);
+  if (ativosNoInicio >= limite) {
+    statusEl.textContent = leitor.nome + ' já está no limite de ' + limite + ' empréstimo(s) simultâneo(s) para o perfil ' + leitor.tipo + '.';
+    document.getElementById('emp-leitor-input').value = '';
+    return;
+  }
+
+  leitorEmAtendimento = { id: leitorId, dados: leitor, limite: limite, ativosNoInicio: ativosNoInicio };
+  emprestimosDaSessao = [];
+  statusEl.textContent = '';
+  document.getElementById('emp-leitor-input').value = '';
+  document.getElementById('emp-leitor-nome').textContent = leitor.nome;
+  document.getElementById('emp-leitor-meta').textContent = [leitor.matricula, leitor.tipo, leitor.turma].filter(Boolean).join(' · ');
+  atualizarContadorLimite();
+  document.getElementById('emp-leitor-card').hidden = false;
+  document.getElementById('emp-exemplar-area').hidden = false;
+  document.getElementById('emp-lista-sessao').innerHTML = '';
+  document.getElementById('emp-exemplar-input').focus();
+}
+
+function atualizarContadorLimite() {
+  if (!leitorEmAtendimento) return;
+  const usados = contarEmprestimosAtivosDoLeitor(leitorEmAtendimento.id);
+  document.getElementById('emp-leitor-limite').textContent = usados + ' de ' + leitorEmAtendimento.limite + ' empréstimo(s) em uso.';
+}
+
+document.getElementById('btn-limpar-emp-leitor').addEventListener('click', function () {
+  document.getElementById('emp-leitor-input').value = '';
+  document.getElementById('emp-leitor-status').textContent = '';
+  document.getElementById('emp-leitor-input').focus();
+});
+
+document.getElementById('emp-exemplar-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); processarEmprestimoExemplar(document.getElementById('emp-exemplar-input').value); }
+});
+
+document.getElementById('btn-limpar-emp-exemplar').addEventListener('click', function () {
+  document.getElementById('emp-exemplar-input').value = '';
+  document.getElementById('emp-exemplar-status').textContent = '';
+  document.getElementById('emp-exemplar-input').focus();
+});
+
+async function processarEmprestimoExemplar(valor) {
+  const codigo = (valor || '').trim();
+  const inputEl = document.getElementById('emp-exemplar-input');
+  const statusEl = document.getElementById('emp-exemplar-status');
+  inputEl.value = '';
+  if (!codigo || !leitorEmAtendimento) return;
+
+  const entry = Object.entries(exemplaresCache).find(function (e) { return e[1].codigo === codigo; });
+  if (!entry) { statusEl.textContent = 'Exemplar "' + codigo + '" não encontrado.'; inputEl.focus(); return; }
+  const exemplarId = entry[0], exemplar = entry[1];
+
+  if (exemplar.status !== 'Disponível') {
+    statusEl.textContent = 'Exemplar ' + codigo + ' está "' + exemplar.status + '" — não pode ser emprestado agora.';
+    inputEl.focus();
+    return;
+  }
+  const usados = contarEmprestimosAtivosDoLeitor(leitorEmAtendimento.id);
+  if (usados >= leitorEmAtendimento.limite) {
+    statusEl.textContent = leitorEmAtendimento.dados.nome + ' atingiu o limite de ' + leitorEmAtendimento.limite + ' empréstimo(s) simultâneo(s).';
+    inputEl.focus();
+    return;
+  }
+  if (!db) { firebaseIndisponivel(); return; }
+
+  statusEl.textContent = 'Registrando…';
+  try {
+    const agora = Date.now();
+    const prevista = agora + PRAZO_DIAS_EMPRESTIMO * 24 * 60 * 60 * 1000;
+    const emprestimoId = db.ref('emprestimos').push().key;
+    const updates = {};
+    updates['emprestimos/' + emprestimoId] = {
+      exemplar_id: exemplarId,
+      livro_id: exemplar.livro_id,
+      leitor_id: leitorEmAtendimento.id,
+      data_emprestimo: agora,
+      data_prevista_devolucao: prevista,
+      data_devolucao_real: null,
+      renovacoes: 0,
+      criado_em: agora
+    };
+    updates['exemplares/' + exemplarId + '/status'] = 'Emprestado';
+    updates['exemplares/' + exemplarId + '/emprestimo_ativo_id'] = emprestimoId;
+    await db.ref().update(updates);
+
+    const livro = livrosCache[exemplar.livro_id];
+    emprestimosDaSessao.push({ codigo: codigo, titulo: livro ? livro.titulo : '(título desconhecido)', prevista: prevista });
+    renderListaSessaoEmprestimo();
+    atualizarContadorLimite();
+    statusEl.textContent = 'Empréstimo registrado: ' + (livro ? livro.titulo : codigo) + '.';
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Erro ao registrar empréstimo.';
+  }
+  inputEl.focus();
+}
+
+function renderListaSessaoEmprestimo() {
+  const cont = document.getElementById('emp-lista-sessao');
+  if (emprestimosDaSessao.length === 0) { cont.innerHTML = ''; return; }
+  cont.innerHTML = emprestimosDaSessao.map(function (item) {
+    return '<div class="leitor-row"><span class="mono">' + escapeHtml(item.codigo) + '</span>' +
+      '<span class="leitor-info">' + escapeHtml(item.titulo) + '</span>' +
+      '<span class="leitor-meta">devolver até ' + new Date(item.prevista).toLocaleDateString('pt-BR') + '</span></div>';
+  }).join('');
+}
+
+document.getElementById('btn-finalizar-atendimento').addEventListener('click', function () {
+  if (emprestimosDaSessao.length > 0) imprimirComprovanteEmprestimo();
+  leitorEmAtendimento = null;
+  emprestimosDaSessao = [];
+  document.getElementById('emp-leitor-card').hidden = true;
+  document.getElementById('emp-exemplar-area').hidden = true;
+  document.getElementById('emp-lista-sessao').innerHTML = '';
+  document.getElementById('emp-leitor-status').textContent = '';
+  document.getElementById('emp-exemplar-status').textContent = '';
+  document.getElementById('emp-leitor-input').value = '';
+  document.getElementById('emp-leitor-input').focus();
+});
+
+function imprimirComprovanteEmprestimo() {
+  const cont = document.getElementById('cupom-emprestimo');
+  const dataAgora = new Date().toLocaleString('pt-BR');
+  const itens = emprestimosDaSessao.map(function (item) {
+    return '<div class="cupom-item">' + escapeHtml(item.titulo) + '<br>' +
+      '<span class="mono">' + escapeHtml(item.codigo) + '</span> — devolver até ' + new Date(item.prevista).toLocaleDateString('pt-BR') + '</div>';
+  }).join('');
+  cont.innerHTML =
+    '<div class="cupom-cabecalho">LPCTeca<span class="cupom-sub">CEEP LUIS PINTO DE CARVALHO</span></div>' +
+    '<div class="cupom-linha"></div>' +
+    '<div class="cupom-item">Leitor: ' + escapeHtml(leitorEmAtendimento.dados.nome) + '<br>Matrícula: ' + escapeHtml(leitorEmAtendimento.dados.matricula) + '</div>' +
+    '<div class="cupom-linha"></div>' +
+    itens +
+    '<div class="cupom-linha"></div>' +
+    '<div class="cupom-rodape">Emitido em ' + dataAgora + '</div>';
+  document.body.classList.add('print-cupom');
+  window.print();
+  document.body.classList.remove('print-cupom');
+}
+
+// ================= Devolução =================
+let devolucoesDaSessao = [];
+
+document.getElementById('dev-input').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') { e.preventDefault(); processarDevolucao(document.getElementById('dev-input').value); }
+});
+
+document.getElementById('btn-limpar-dev').addEventListener('click', function () {
+  document.getElementById('dev-input').value = '';
+  document.getElementById('dev-status').textContent = '';
+  document.getElementById('dev-input').focus();
+});
+
+async function processarDevolucao(valor) {
+  const codigo = (valor || '').trim();
+  const inputEl = document.getElementById('dev-input');
+  const statusEl = document.getElementById('dev-status');
+  inputEl.value = '';
+  if (!codigo) return;
+
+  const entry = Object.entries(exemplaresCache).find(function (e) { return e[1].codigo === codigo; });
+  if (!entry) { statusEl.textContent = 'Exemplar "' + codigo + '" não encontrado.'; inputEl.focus(); return; }
+  const exemplarId = entry[0], exemplar = entry[1];
+
+  if (exemplar.status !== 'Emprestado' || !exemplar.emprestimo_ativo_id) {
+    statusEl.textContent = 'Exemplar ' + codigo + ' não está com empréstimo em aberto (status atual: ' + exemplar.status + ').';
+    inputEl.focus();
+    return;
+  }
+  if (!db) { firebaseIndisponivel(); return; }
+
+  statusEl.textContent = 'Registrando devolução…';
+  try {
+    const agora = Date.now();
+    const emprestimo = emprestimosCache[exemplar.emprestimo_ativo_id];
+    const atrasado = !!(emprestimo && agora > emprestimo.data_prevista_devolucao);
+    const reservaPendente = encontrarProximaReservaPendente(exemplar.livro_id);
+    const updates = {};
+    updates['emprestimos/' + exemplar.emprestimo_ativo_id + '/data_devolucao_real'] = agora;
+    if (reservaPendente) {
+      const reservaId = reservaPendente[0];
+      updates['exemplares/' + exemplarId + '/status'] = 'Reservado';
+      updates['exemplares/' + exemplarId + '/emprestimo_ativo_id'] = null;
+      updates['exemplares/' + exemplarId + '/reserva_id'] = reservaId;
+      updates['reservas/' + reservaId + '/status'] = 'Disponivel';
+      updates['reservas/' + reservaId + '/data_disponibilizada'] = agora;
+      updates['reservas/' + reservaId + '/exemplar_id'] = exemplarId;
+    } else {
+      updates['exemplares/' + exemplarId + '/status'] = 'Disponível';
+      updates['exemplares/' + exemplarId + '/emprestimo_ativo_id'] = null;
+    }
+    await db.ref().update(updates);
+
+    const livro = livrosCache[exemplar.livro_id];
+    let mensagem = (atrasado ? 'Devolvido com atraso: ' : 'Devolvido: ') + (livro ? livro.titulo : codigo) + '.';
+    if (reservaPendente) {
+      const leitorReserva = leitoresCache[reservaPendente[1].leitor_id];
+      mensagem += ' Reservado automaticamente para ' + (leitorReserva ? leitorReserva.nome : 'leitor da fila') + ' — avise a pessoa.';
+    }
+    devolucoesDaSessao.unshift({ codigo: codigo, titulo: livro ? livro.titulo : '(título desconhecido)', atrasado: atrasado });
+    renderListaSessaoDevolucao();
+    statusEl.textContent = mensagem;
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Erro ao registrar devolução.';
+  }
+  inputEl.focus();
+}
+
+function renderListaSessaoDevolucao() {
+  const cont = document.getElementById('dev-lista-sessao');
+  cont.innerHTML = devolucoesDaSessao.map(function (item) {
+    return '<div class="leitor-row"><span class="mono">' + escapeHtml(item.codigo) + '</span>' +
+      '<span class="leitor-info">' + escapeHtml(item.titulo) + '</span>' +
+      '<span class="status status-' + (item.atrasado ? 'suspenso">Atrasado' : 'ativo">No prazo') + '</span></div>';
+  }).join('');
+}
+
+document.getElementById('dash-atrasados-card').addEventListener('click', function () {
+  document.getElementById('dash-secao-atrasados').scrollIntoView({ behavior: 'smooth' });
+});
+
+// ================= Renovação e empréstimos ativos =================
+const LIMITE_RENOVACOES = 1;
+
+function encontrarProximaReservaPendente(livroId) {
+  const candidatas = Object.entries(reservasCache).filter(function (e) { return e[1].livro_id === livroId && e[1].status === 'Aguardando'; });
+  candidatas.sort(function (a, b) { return (a[1].criado_em || 0) - (b[1].criado_em || 0); });
+  return candidatas.length ? candidatas[0] : null;
+}
+
+document.getElementById('ativos-busca').addEventListener('input', renderListaAtivos);
+
+function renderListaAtivos() {
+  const cont = document.getElementById('ativos-lista');
+  if (!cont) return;
+  const termo = (document.getElementById('ativos-busca').value || '').trim().toLowerCase();
+  const ativos = Object.entries(emprestimosCache).filter(function (e) { return !e[1].data_devolucao_real; });
+  const filtrados = ativos.filter(function (entry) {
+    if (!termo) return true;
+    const emp = entry[1];
+    const livro = livrosCache[emp.livro_id];
+    const leitor = leitoresCache[emp.leitor_id];
+    return (livro && livro.titulo || '').toLowerCase().includes(termo) || (leitor && leitor.nome || '').toLowerCase().includes(termo);
+  }).sort(function (a, b) { return (a[1].data_prevista_devolucao || 0) - (b[1].data_prevista_devolucao || 0); });
+
+  if (filtrados.length === 0) {
+    cont.innerHTML = '<p class="empty">' + (ativos.length === 0 ? 'Nenhum empréstimo em aberto.' : 'Nenhum resultado para essa busca.') + '</p>';
+    return;
+  }
+  const agora = Date.now();
+  cont.innerHTML = filtrados.map(function (entry) {
+    const empId = entry[0], emp = entry[1];
+    const livro = livrosCache[emp.livro_id];
+    const leitor = leitoresCache[emp.leitor_id];
+    const atrasado = emp.data_prevista_devolucao < agora;
+    const renovacoes = emp.renovacoes || 0;
+    return '<div class="leitor-row">' +
+      '<div class="leitor-info"><strong>' + escapeHtml(livro ? livro.titulo : '(título desconhecido)') + '</strong>' +
+      '<span class="leitor-meta">' + escapeHtml(leitor ? leitor.nome : '(leitor desconhecido)') + ' · devolver até ' + new Date(emp.data_prevista_devolucao).toLocaleDateString('pt-BR') + (renovacoes ? ' · ' + renovacoes + ' renovação(ões)' : '') + '</span></div>' +
+      '<span class="status status-' + (atrasado ? 'suspenso">Atrasado' : 'ativo">No prazo') + '</span>' +
+      '<div class="livro-actions"><button type="button" class="btn-acao btn-renovar" data-id="' + empId + '">Renovar</button></div>' +
+      '</div>';
+  }).join('');
+  cont.querySelectorAll('.btn-renovar').forEach(function (btn) {
+    btn.addEventListener('click', function () { renovarEmprestimo(btn.dataset.id); });
+  });
+}
+
+async function renovarEmprestimo(emprestimoId) {
+  if (!db) { firebaseIndisponivel(); return; }
+  const emp = emprestimosCache[emprestimoId];
+  if (!emp) return;
+  const renovacoes = emp.renovacoes || 0;
+  if (renovacoes >= LIMITE_RENOVACOES) {
+    alert('Este empréstimo já atingiu o limite de ' + LIMITE_RENOVACOES + ' renovação(ões).');
+    return;
+  }
+  const reservaPendente = encontrarProximaReservaPendente(emp.livro_id);
+  if (reservaPendente) {
+    alert('Não é possível renovar: há reserva de outro leitor esperando este título.');
+    return;
+  }
+  if (!confirm('Renovar por mais ' + PRAZO_DIAS_EMPRESTIMO + ' dias?')) return;
+  try {
+    const novaData = Date.now() + PRAZO_DIAS_EMPRESTIMO * 24 * 60 * 60 * 1000;
+    await db.ref('emprestimos/' + emprestimoId).update({
+      data_prevista_devolucao: novaData,
+      renovacoes: renovacoes + 1
+    });
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao renovar.');
+  }
+}
+
+// ================= Reservas =================
+document.getElementById('reservas-busca').addEventListener('input', renderListaReservas);
+
+function renderSelectReservaLivro() {
+  const sel = document.getElementById('reserva-livro');
+  if (!sel) return;
+  const atual = sel.value;
+  const contagemDisponivel = {};
+  Object.values(exemplaresCache).forEach(function (ex) {
+    if (ex.status === 'Disponível') contagemDisponivel[ex.livro_id] = (contagemDisponivel[ex.livro_id] || 0) + 1;
+  });
+  const semDisponivel = Object.entries(livrosCache)
+    .filter(function (e) { return !contagemDisponivel[e[0]]; })
+    .sort(function (a, b) { return (a[1].titulo || '').localeCompare(b[1].titulo || ''); });
+  sel.innerHTML = '<option value="">Selecione…</option>' + semDisponivel.map(function (e) {
+    return '<option value="' + e[0] + '">' + escapeHtml(e[1].titulo) + '</option>';
+  }).join('');
+  if (atual) sel.value = atual;
+}
+
+let leitorConfirmadoReserva = null;
+
+document.getElementById('reserva-leitor-matricula').addEventListener('keydown', function (e) {
+  if (e.key === 'Enter') {
+    e.preventDefault();
+    const termo = document.getElementById('reserva-leitor-matricula').value.trim();
+    const entry = Object.entries(leitoresCache).find(function (le) { return le[1].matricula === termo; });
+    const info = document.getElementById('reserva-leitor-confirmado');
+    if (!entry) { info.textContent = 'Leitor não encontrado para essa matrícula.'; leitorConfirmadoReserva = null; return; }
+    leitorConfirmadoReserva = { id: entry[0], dados: entry[1] };
+    info.textContent = 'Leitor: ' + entry[1].nome + ' (' + entry[1].matricula + ')';
+  }
+});
+
+document.getElementById('btn-limpar-reserva-leitor').addEventListener('click', function () {
+  document.getElementById('reserva-leitor-matricula').value = '';
+  document.getElementById('reserva-leitor-confirmado').textContent = '';
+  leitorConfirmadoReserva = null;
+});
+
+document.getElementById('btn-criar-reserva').addEventListener('click', async function () {
+  if (!db) { firebaseIndisponivel(); return; }
+  const livroId = document.getElementById('reserva-livro').value;
+  const statusEl = document.getElementById('reserva-status');
+  if (!livroId) { statusEl.textContent = 'Selecione o título.'; return; }
+  if (!leitorConfirmadoReserva) { statusEl.textContent = 'Confirme o leitor pela matrícula antes (Enter no campo).'; return; }
+  const jaTemReserva = Object.values(reservasCache).some(function (r) {
+    return r.livro_id === livroId && r.leitor_id === leitorConfirmadoReserva.id && (r.status === 'Aguardando' || r.status === 'Disponivel');
+  });
+  if (jaTemReserva) { statusEl.textContent = 'Este leitor já tem uma reserva ativa para este título.'; return; }
+
+  try {
+    await db.ref('reservas').push({
+      livro_id: livroId,
+      leitor_id: leitorConfirmadoReserva.id,
+      status: 'Aguardando',
+      data_reserva: Date.now(),
+      data_disponibilizada: null,
+      exemplar_id: null,
+      criado_em: Date.now()
+    });
+    statusEl.textContent = 'Reserva criada.';
+    document.getElementById('reserva-leitor-matricula').value = '';
+    document.getElementById('reserva-leitor-confirmado').textContent = '';
+    leitorConfirmadoReserva = null;
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Erro ao criar reserva.';
+  }
+});
+
+function renderListaReservas() {
+  const cont = document.getElementById('reservas-lista');
+  if (!cont) return;
+  const termo = (document.getElementById('reservas-busca').value || '').trim().toLowerCase();
+  const PRAZO_RETIRADA_DIAS = 3;
+  const agora = Date.now();
+
+  Object.entries(reservasCache).forEach(function (entry) {
+    const r = entry[1];
+    if (r.status === 'Disponivel' && r.data_disponibilizada && (agora - r.data_disponibilizada) > PRAZO_RETIRADA_DIAS * 86400000) {
+      expirarReservaEDisponibilizarProxima(entry[0], r);
+    }
+  });
+
+  const lista = Object.entries(reservasCache).filter(function (entry) {
+    if (entry[1].status === 'Cancelada' || entry[1].status === 'Retirada' || entry[1].status === 'Expirada') return false;
+    if (!termo) return true;
+    const livro = livrosCache[entry[1].livro_id];
+    return (livro && livro.titulo || '').toLowerCase().includes(termo);
+  }).sort(function (a, b) { return (a[1].criado_em || 0) - (b[1].criado_em || 0); });
+
+  if (lista.length === 0) {
+    cont.innerHTML = '<p class="empty">Nenhuma reserva ativa.</p>';
+    return;
+  }
+  cont.innerHTML = lista.map(function (entry) {
+    const id = entry[0], r = entry[1];
+    const livro = livrosCache[r.livro_id];
+    const leitor = leitoresCache[r.leitor_id];
+    const disponivel = r.status === 'Disponivel';
+    return '<div class="leitor-row">' +
+      '<div class="leitor-info"><strong>' + escapeHtml(livro ? livro.titulo : '(título desconhecido)') + '</strong>' +
+      '<span class="leitor-meta">' + escapeHtml(leitor ? leitor.nome : '(leitor desconhecido)') + '</span></div>' +
+      '<span class="status status-' + (disponivel ? 'ativo">Pronta para retirada' : 'bloqueado">Aguardando') + '</span>' +
+      '<div class="livro-actions">' +
+      (disponivel ? '<button type="button" class="btn-acao btn-retirar-reserva" data-id="' + id + '">Marcar retirado</button>' : '') +
+      '<button type="button" class="btn-acao btn-cancelar-reserva" data-id="' + id + '">Cancelar</button>' +
+      '</div></div>';
+  }).join('');
+  cont.querySelectorAll('.btn-cancelar-reserva').forEach(function (btn) {
+    btn.addEventListener('click', function () { cancelarReserva(btn.dataset.id); });
+  });
+  cont.querySelectorAll('.btn-retirar-reserva').forEach(function (btn) {
+    btn.addEventListener('click', function () { retirarReserva(btn.dataset.id); });
+  });
+}
+
+async function cancelarReserva(reservaId) {
+  if (!db) { firebaseIndisponivel(); return; }
+  const r = reservasCache[reservaId];
+  if (!confirm('Cancelar esta reserva?')) return;
+  try {
+    if (r && r.status === 'Disponivel' && r.exemplar_id) {
+      await liberarExemplarDeReserva(r.exemplar_id, r.livro_id);
+    }
+    await db.ref('reservas/' + reservaId + '/status').set('Cancelada');
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao cancelar reserva.');
+  }
+}
+
+async function expirarReservaEDisponibilizarProxima(reservaId, reserva) {
+  if (!db) return;
+  try {
+    await db.ref('reservas/' + reservaId + '/status').set('Expirada');
+    if (reserva.exemplar_id) await liberarExemplarDeReserva(reserva.exemplar_id, reserva.livro_id);
+  } catch (err) {
+    console.error('Erro ao expirar reserva', err);
+  }
+}
+
+async function liberarExemplarDeReserva(exemplarId, livroId) {
+  const proxima = encontrarProximaReservaPendente(livroId);
+  const updates = {};
+  if (proxima) {
+    const proximaId = proxima[0];
+    updates['exemplares/' + exemplarId + '/status'] = 'Reservado';
+    updates['exemplares/' + exemplarId + '/reserva_id'] = proximaId;
+    updates['reservas/' + proximaId + '/status'] = 'Disponivel';
+    updates['reservas/' + proximaId + '/data_disponibilizada'] = Date.now();
+    updates['reservas/' + proximaId + '/exemplar_id'] = exemplarId;
+  } else {
+    updates['exemplares/' + exemplarId + '/status'] = 'Disponível';
+    updates['exemplares/' + exemplarId + '/reserva_id'] = null;
+  }
+  await db.ref().update(updates);
+}
+
+async function retirarReserva(reservaId) {
+  if (!db) { firebaseIndisponivel(); return; }
+  const reserva = reservasCache[reservaId];
+  if (!reserva || !reserva.exemplar_id) return;
+  const leitor = leitoresCache[reserva.leitor_id];
+  if (leitor && (leitor.situacao || 'Ativo') !== 'Ativo') {
+    alert('Leitor está "' + leitor.situacao + '" — não é possível concluir o empréstimo.');
+    return;
+  }
+  if (!confirm('Confirmar retirada e registrar o empréstimo?')) return;
+  try {
+    const agora = Date.now();
+    const prevista = agora + PRAZO_DIAS_EMPRESTIMO * 24 * 60 * 60 * 1000;
+    const emprestimoId = db.ref('emprestimos').push().key;
+    const updates = {};
+    updates['emprestimos/' + emprestimoId] = {
+      exemplar_id: reserva.exemplar_id,
+      livro_id: reserva.livro_id,
+      leitor_id: reserva.leitor_id,
+      data_emprestimo: agora,
+      data_prevista_devolucao: prevista,
+      data_devolucao_real: null,
+      renovacoes: 0,
+      criado_em: agora
+    };
+    updates['exemplares/' + reserva.exemplar_id + '/status'] = 'Emprestado';
+    updates['exemplares/' + reserva.exemplar_id + '/emprestimo_ativo_id'] = emprestimoId;
+    updates['exemplares/' + reserva.exemplar_id + '/reserva_id'] = null;
+    updates['reservas/' + reservaId + '/status'] = 'Retirada';
+    await db.ref().update(updates);
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao registrar retirada.');
+  }
+}
+
+document.getElementById('dash-reservas-card').addEventListener('click', function () {
+  document.querySelector('.tab[data-tab="reservas"]').click();
+});
 
 function slug(s) {
   return String(s || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/\s+/g, '-');
