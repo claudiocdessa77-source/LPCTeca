@@ -615,23 +615,26 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
       <div class="card" style="margin-bottom:20px;">
         <h3>Novo leitor</h3>
-        <div class="form-grid">
-          <div class="field field-wide"><label>Nome completo *</label><input id="leitor-nome" autocomplete="off" /></div>
-          <div class="field field-sm"><label>CPF *</label><input id="leitor-cpf" class="mono" placeholder="000.000.000-00" maxlength="14" autocomplete="off" /></div>
-          <div class="field field-sm">
-            <label>Tipo *</label>
-            <select id="leitor-tipo">
-              <option value="Aluno">Aluno</option>
-              <option value="Professor">Professor</option>
-              <option value="Servidor">Servidor</option>
-            </select>
+        <div class="field field-sm"><label>CPF *</label><input id="leitor-cpf" class="mono" placeholder="000.000.000-00" maxlength="14" autocomplete="off" /></div>
+        <p id="leitor-cpf-status" class="etq-ajuda"></p>
+        <div id="leitor-resto-form" hidden>
+          <div class="form-grid">
+            <div class="field field-wide"><label>Nome completo *</label><input id="leitor-nome" autocomplete="off" /></div>
+            <div class="field field-sm">
+              <label>Tipo *</label>
+              <select id="leitor-tipo">
+                <option value="Aluno">Aluno</option>
+                <option value="Professor">Professor</option>
+                <option value="Servidor">Servidor</option>
+              </select>
+            </div>
+            <div class="field field-sm"><label>Curso (opcional)</label><select id="leitor-curso"></select></div>
+            <div class="field field-sm"><label>Turma (opcional)</label><select id="leitor-turma-select"></select></div>
+            <div class="field field-sm"><label>Contato (opcional)</label><input id="leitor-contato" class="mono" placeholder="(00) 00000-0000" maxlength="15" autocomplete="off" /></div>
           </div>
-          <div class="field field-sm"><label>Curso (opcional)</label><select id="leitor-curso"></select></div>
-          <div class="field field-sm"><label>Turma (opcional)</label><select id="leitor-turma-select"></select></div>
-          <div class="field field-sm"><label>Contato (opcional)</label><input id="leitor-contato" class="mono" placeholder="(00) 00000-0000" maxlength="15" autocomplete="off" /></div>
+          <p class="etq-ajuda">A matrícula é gerada automaticamente (01LPC + número sequencial) ao salvar. Cursos e turmas são cadastrados em Configurações.</p>
+          <button type="button" id="btn-add-leitor" class="btn btn-primary btn-block">Adicionar leitor</button>
         </div>
-        <p class="etq-ajuda">A matrícula é gerada automaticamente (01LPC + número sequencial) ao salvar. Cursos e turmas são cadastrados em Configurações.</p>
-        <button type="button" id="btn-add-leitor" class="btn btn-primary btn-block">Adicionar leitor</button>
       </div>
       <div id="leitores-lista"></div>
     </section>
@@ -1156,19 +1159,26 @@ function firebaseIndisponivel() {
   alert('O Firebase ainda não está configurado ou a conexão falhou. Confira o firebaseConfig no início do arquivo e acesse o sistema pela URL publicada — não abrindo o arquivo direto no navegador.');
 }
 
+function erroLeitura(nomeColecao) {
+  return function (err) {
+    console.error('Erro ao ler "' + nomeColecao + '" — provavelmente falta regra de permissão no Realtime Database para este caminho.', err);
+    connEl.textContent = 'erro ao ler "' + nomeColecao + '" (veja o console)';
+  };
+}
+
 function attachListeners() {
   db.ref('ruas').on('value', function (snap) {
     ruasCache = snap.val() || {};
     renderRuasSelects();
     renderRuasLista();
     renderAcervo();
-  });
+  }, erroLeitura('ruas'));
   db.ref('prateleiras').on('value', function (snap) {
     prateleirasCache = snap.val() || {};
     renderRuasSelects();
     renderRuasLista();
     renderAcervo();
-  });
+  }, erroLeitura('prateleiras'));
   db.ref('livros').on('value', function (snap) {
     livrosCache = snap.val() || {};
     renderAcervo();
@@ -1176,46 +1186,46 @@ function attachListeners() {
     renderSelectReservaLivro();
     renderListaAtivos();
     renderListaReservas();
-  });
+  }, erroLeitura('livros'));
   db.ref('exemplares').on('value', function (snap) {
     exemplaresCache = snap.val() || {};
     renderAcervo();
     renderDashboard();
     renderSelectReservaLivro();
-  });
+  }, erroLeitura('exemplares'));
   db.ref('leitores').on('value', function (snap) {
     leitoresCache = snap.val() || {};
     renderLeitoresLista();
     renderListaAtivos();
     renderListaReservas();
-  });
+  }, erroLeitura('leitores'));
   db.ref('cursos').on('value', function (snap) {
     cursosCache = snap.val() || {};
     renderCursosSelects();
     renderCursosLista();
-  });
+  }, erroLeitura('cursos'));
   db.ref('turmas').on('value', function (snap) {
     turmasCache = snap.val() || {};
     renderCursosSelects();
     renderCursosLista();
     renderLeitoresLista();
-  });
+  }, erroLeitura('turmas'));
   db.ref('usuarios').on('value', function (snap) {
     usuariosCache = snap.val() || {};
     renderUsuariosLista();
-  });
+  }, erroLeitura('usuarios'));
   db.ref('emprestimos').on('value', function (snap) {
     emprestimosCache = snap.val() || {};
     renderDashboard();
     renderListaAtivos();
     if (leitorEmAtendimento) atualizarContadorLimite();
-  });
+  }, erroLeitura('emprestimos'));
   db.ref('reservas').on('value', function (snap) {
     reservasCache = snap.val() || {};
     renderDashboard();
     renderSelectReservaLivro();
     renderListaReservas();
-  });
+  }, erroLeitura('reservas'));
 }
 
 // ================= Ruas e Prateleiras =================
@@ -2603,6 +2613,45 @@ aplicarMascara(document.getElementById('leitor-contato'), mascararTelefone);
 aplicarMascara(document.getElementById('edit-leitor-cpf'), mascararCPF);
 aplicarMascara(document.getElementById('edit-leitor-contato'), mascararTelefone);
 
+let cpfConfirmadoNovoLeitor = null;
+
+document.getElementById('leitor-cpf').addEventListener('input', async function () {
+  const cpf = document.getElementById('leitor-cpf').value;
+  const cpfDigitos = cpf.replace(/\D/g, '');
+  const statusEl = document.getElementById('leitor-cpf-status');
+  const resto = document.getElementById('leitor-resto-form');
+
+  resto.hidden = true;
+  cpfConfirmadoNovoLeitor = null;
+
+  if (cpfDigitos.length < 11) {
+    statusEl.textContent = '';
+    return;
+  }
+  if (!validarCPF(cpf)) {
+    statusEl.textContent = 'CPF inválido — confira os números.';
+    return;
+  }
+  if (!db) { firebaseIndisponivel(); return; }
+  statusEl.textContent = 'Verificando…';
+  try {
+    const snap = await db.ref('cpfs_leitor/' + cpfDigitos).once('value');
+    if (document.getElementById('leitor-cpf').value.replace(/\D/g, '') !== cpfDigitos) return;
+    if (snap.exists()) {
+      const existente = Object.values(leitoresCache).find(function (l) { return (l.cpf || '').replace(/\D/g, '') === cpfDigitos; });
+      statusEl.textContent = 'Este CPF já está cadastrado' + (existente ? ' — ' + existente.nome : '') + '.';
+    } else {
+      statusEl.textContent = 'CPF disponível — continue o cadastro abaixo.';
+      cpfConfirmadoNovoLeitor = cpf;
+      resto.hidden = false;
+      document.getElementById('leitor-nome').focus();
+    }
+  } catch (err) {
+    console.error(err);
+    statusEl.textContent = 'Não foi possível verificar o CPF agora.';
+  }
+});
+
 function proximaMatriculaLeitor() {
   return db.ref('contadores/leitor').transaction(function (atual) { return (atual || 0) + 1; }).then(function (res) {
     return '01LPC' + String(res.snapshot.val()).padStart(3, '0');
@@ -2616,13 +2665,17 @@ document.getElementById('btn-add-leitor').addEventListener('click', async functi
   if (!nome || !cpf) { alert('Preencha nome e CPF.'); return; }
   if (!validarCPF(cpf)) { alert('CPF inválido. Confira os números digitados.'); return; }
   const cpfDigitos = cpf.replace(/\D/g, '');
-  const jaExiste = Object.values(leitoresCache).some(function (l) { return (l.cpf || '').replace(/\D/g, '') === cpfDigitos; });
-  if (jaExiste) { alert('Já existe um leitor cadastrado com esse CPF.'); return; }
 
   const btn = document.getElementById('btn-add-leitor');
   btn.disabled = true;
   btn.textContent = 'Salvando…';
   try {
+    try {
+      await db.ref('cpfs_leitor/' + cpfDigitos).set(true);
+    } catch (errCpf) {
+      alert('Já existe um leitor cadastrado com esse CPF.');
+      return;
+    }
     const matricula = await proximaMatriculaLeitor();
     await db.ref('leitores').push({
       nome: nome,
@@ -2638,6 +2691,9 @@ document.getElementById('btn-add-leitor').addEventListener('click', async functi
     document.getElementById('leitor-nome').value = '';
     document.getElementById('leitor-cpf').value = '';
     document.getElementById('leitor-contato').value = '';
+    document.getElementById('leitor-cpf-status').textContent = '';
+    document.getElementById('leitor-resto-form').hidden = true;
+    cpfConfirmadoNovoLeitor = null;
     alert('Leitor cadastrado. Matrícula gerada: ' + matricula);
   } catch (err) {
     console.error(err);
@@ -2727,8 +2783,18 @@ document.getElementById('btn-salvar-edicao-leitor').addEventListener('click', as
   if (!nome || !cpf) { alert('Preencha nome e CPF.'); return; }
   if (!validarCPF(cpf)) { alert('CPF inválido. Confira os números digitados.'); return; }
   const cpfDigitos = cpf.replace(/\D/g, '');
-  const duplicado = Object.entries(leitoresCache).some(function (e) { return e[0] !== editandoLeitorId && (e[1].cpf || '').replace(/\D/g, '') === cpfDigitos; });
-  if (duplicado) { alert('Já existe outro leitor com esse CPF.'); return; }
+  const leitorAtual = leitoresCache[editandoLeitorId] || {};
+  const cpfDigitosAntigo = (leitorAtual.cpf || '').replace(/\D/g, '');
+  const cpfMudou = cpfDigitos !== cpfDigitosAntigo;
+
+  if (cpfMudou) {
+    try {
+      await db.ref('cpfs_leitor/' + cpfDigitos).set(true);
+    } catch (errCpf) {
+      alert('Já existe outro leitor cadastrado com esse CPF.');
+      return;
+    }
+  }
   try {
     await db.ref('leitores/' + editandoLeitorId).update({
       nome: nome,
@@ -2739,11 +2805,15 @@ document.getElementById('btn-salvar-edicao-leitor').addEventListener('click', as
       contato: document.getElementById('edit-leitor-contato').value.trim(),
       situacao: document.getElementById('edit-leitor-situacao').value
     });
+    if (cpfMudou && cpfDigitosAntigo) {
+      db.ref('cpfs_leitor/' + cpfDigitosAntigo).remove().catch(function (e) { console.warn('Não foi possível liberar o CPF antigo', e); });
+    }
     document.getElementById('edit-leitor-modal').hidden = true;
     editandoLeitorId = null;
   } catch (err) {
     console.error(err);
     alert('Erro ao salvar leitor.');
+    if (cpfMudou) db.ref('cpfs_leitor/' + cpfDigitos).remove().catch(function () {});
   }
 });
 
@@ -2778,6 +2848,8 @@ function excluirLeitor(id) {
     if (!confirm('Excluir o leitor "' + (l ? l.nome : '') + '"?')) return;
     try {
       await db.ref('leitores/' + id).remove();
+      const cpfDigitos = l ? (l.cpf || '').replace(/\D/g, '') : '';
+      if (cpfDigitos) db.ref('cpfs_leitor/' + cpfDigitos).remove().catch(function (e) { console.warn('Não foi possível liberar o CPF', e); });
     } catch (err) {
       console.error(err);
       alert('Erro ao excluir leitor.');
