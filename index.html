@@ -2748,11 +2748,15 @@ function renderLeitoresLista() {
       '<td>' + escapeHtml(cursoTurma || '—') + '</td>' +
       '<td><span class="status status-' + slug(l.situacao || 'Ativo') + '">' + escapeHtml(l.situacao || 'Ativo') + '</span></td>' +
       '<td><div class="livro-actions">' +
+      '<button type="button" class="btn-acao btn-cartao-leitor" data-id="' + id + '">🪪 Cartão</button>' +
       '<button type="button" class="btn-acao btn-editar-leitor" data-id="' + id + '">Editar</button>' +
       '<button type="button" class="btn-acao btn-excluir-leitor" data-id="' + id + '">Excluir</button>' +
       '</div></td></tr>';
   }).join('');
   cont.innerHTML = '<table class="acervo-tabela"><thead><tr><th>Nome</th><th>Matrícula</th><th>Tipo</th><th>Curso/Turma</th><th>Situação</th><th></th></tr></thead><tbody>' + linhas + '</tbody></table>';
+  cont.querySelectorAll('.btn-cartao-leitor').forEach(function (btn) {
+    btn.addEventListener('click', function () { imprimirCartaoLeitor(btn.dataset.id); });
+  });
   cont.querySelectorAll('.btn-editar-leitor').forEach(function (btn) {
     btn.addEventListener('click', function () { abrirEdicaoLeitor(btn.dataset.id); });
   });
