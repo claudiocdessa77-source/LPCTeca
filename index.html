@@ -429,6 +429,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <button class="tab" data-tab="enderecos">Ruas e prateleiras</button>
     <button class="tab" data-tab="leitores">Leitores</button>
     <button class="tab" data-tab="usuarios">Usuários</button>
+    <button class="tab" data-tab="config">Configurações</button>
     <button class="tab" data-tab="emprestimo">Empréstimo</button>
     <button class="tab" data-tab="devolucao">Devolução</button>
     <button class="tab" data-tab="reservas">Reservas</button>
@@ -612,26 +613,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <input id="leitor-busca" class="search" placeholder="Buscar por nome, matrícula ou CPF…" />
       </div>
 
-      <div class="enderecos-grid" style="margin-bottom:20px;">
-        <div class="card">
-          <h3>Novo curso</h3>
-          <div class="field"><label>Nome do curso</label><input id="curso-nome" placeholder="Administração" /></div>
-          <button id="btn-add-curso" class="btn btn-primary btn-block">Adicionar curso</button>
-        </div>
-        <div class="card">
-          <h3>Nova turma</h3>
-          <div class="field"><label>Curso</label><select id="turma-curso"></select></div>
-          <div class="field"><label>Nome da turma</label><input id="turma-nome" placeholder="RH 2026.1 — Noturno" /></div>
-          <button id="btn-add-turma" class="btn btn-primary btn-block">Adicionar turma</button>
-        </div>
-      </div>
-      <div id="cursos-lista" style="margin-bottom:20px;"></div>
-
       <div class="card" style="margin-bottom:20px;">
         <h3>Novo leitor</h3>
         <div class="form-grid">
-          <div class="field field-wide"><label>Nome completo *</label><input id="leitor-nome" /></div>
-          <div class="field field-sm"><label>CPF *</label><input id="leitor-cpf" class="mono" placeholder="000.000.000-00" maxlength="14" /></div>
+          <div class="field field-wide"><label>Nome completo *</label><input id="leitor-nome" autocomplete="off" /></div>
+          <div class="field field-sm"><label>CPF *</label><input id="leitor-cpf" class="mono" placeholder="000.000.000-00" maxlength="14" autocomplete="off" /></div>
           <div class="field field-sm">
             <label>Tipo *</label>
             <select id="leitor-tipo">
@@ -642,12 +628,31 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           </div>
           <div class="field field-sm"><label>Curso (opcional)</label><select id="leitor-curso"></select></div>
           <div class="field field-sm"><label>Turma (opcional)</label><select id="leitor-turma-select"></select></div>
-          <div class="field field-sm"><label>Contato (opcional)</label><input id="leitor-contato" class="mono" placeholder="(00) 00000-0000" maxlength="15" /></div>
+          <div class="field field-sm"><label>Contato (opcional)</label><input id="leitor-contato" class="mono" placeholder="(00) 00000-0000" maxlength="15" autocomplete="off" /></div>
         </div>
-        <p class="etq-ajuda">A matrícula é gerada automaticamente (8 dígitos, sequencial) ao salvar.</p>
+        <p class="etq-ajuda">A matrícula é gerada automaticamente (01LPC + número sequencial) ao salvar. Cursos e turmas são cadastrados em Configurações.</p>
         <button type="button" id="btn-add-leitor" class="btn btn-primary btn-block">Adicionar leitor</button>
       </div>
       <div id="leitores-lista"></div>
+    </section>
+
+    <section id="panel-config" class="panel">
+      <h3>Cursos e turmas</h3>
+      <p class="etq-ajuda">Cadastre aqui todos os cursos e turmas em atividade na unidade — eles aparecem como opção no cadastro de leitores.</p>
+      <div class="enderecos-grid" style="margin-bottom:20px;">
+        <div class="card">
+          <h3>Novo curso</h3>
+          <div class="field"><label>Nome do curso</label><input id="curso-nome" placeholder="Administração" autocomplete="off" /></div>
+          <button id="btn-add-curso" class="btn btn-primary btn-block">Adicionar curso</button>
+        </div>
+        <div class="card">
+          <h3>Nova turma</h3>
+          <div class="field"><label>Curso</label><select id="turma-curso"></select></div>
+          <div class="field"><label>Nome da turma</label><input id="turma-nome" placeholder="RH 2026.1 — Noturno" autocomplete="off" /></div>
+          <button id="btn-add-turma" class="btn btn-primary btn-block">Adicionar turma</button>
+        </div>
+      </div>
+      <div id="cursos-lista"></div>
     </section>
 
     <section id="panel-usuarios" class="panel">
@@ -937,6 +942,7 @@ document.querySelectorAll('.tab').forEach(function (btn) {
     if (btn.dataset.tab === 'dashboard') renderDashboard();
     if (btn.dataset.tab === 'leitores') renderLeitoresLista();
     if (btn.dataset.tab === 'usuarios') renderUsuariosLista();
+    if (btn.dataset.tab === 'config') { renderCursosSelects(); renderCursosLista(); }
     if (btn.dataset.tab === 'devolucao') renderListaAtivos();
     if (btn.dataset.tab === 'reservas') { renderSelectReservaLivro(); renderListaReservas(); }
   });
@@ -2579,7 +2585,7 @@ aplicarMascara(document.getElementById('edit-leitor-contato'), mascararTelefone)
 
 function proximaMatriculaLeitor() {
   return db.ref('contadores/leitor').transaction(function (atual) { return (atual || 0) + 1; }).then(function (res) {
-    return String(res.snapshot.val()).padStart(8, '0');
+    return '01LPC' + String(res.snapshot.val()).padStart(3, '0');
   });
 }
 
@@ -2644,18 +2650,21 @@ function renderLeitoresLista() {
     cont.innerHTML = '<p class="empty">' + (entradas.length === 0 ? 'Nenhum leitor cadastrado ainda.' : 'Nenhum resultado para essa busca.') + '</p>';
     return;
   }
-  cont.innerHTML = filtrados.map(function (entry) {
+  const linhas = filtrados.map(function (entry) {
     const id = entry[0], l = entry[1];
     const cursoTurma = nomeCursoTurma(l);
-    return '<div class="leitor-row">' +
-      '<div class="leitor-info"><strong>' + escapeHtml(l.nome) + '</strong>' +
-      '<span class="leitor-meta">Mat. ' + escapeHtml(l.matricula || '') + ' · ' + escapeHtml(l.tipo || '') + (cursoTurma ? ' · ' + escapeHtml(cursoTurma) : '') + '</span></div>' +
-      '<span class="status status-' + slug(l.situacao || 'Ativo') + '">' + escapeHtml(l.situacao || 'Ativo') + '</span>' +
-      '<div class="livro-actions">' +
+    return '<tr>' +
+      '<td><strong>' + escapeHtml(l.nome) + '</strong></td>' +
+      '<td class="mono">' + escapeHtml(l.matricula || '') + '</td>' +
+      '<td>' + escapeHtml(l.tipo || '') + '</td>' +
+      '<td>' + escapeHtml(cursoTurma || '—') + '</td>' +
+      '<td><span class="status status-' + slug(l.situacao || 'Ativo') + '">' + escapeHtml(l.situacao || 'Ativo') + '</span></td>' +
+      '<td><div class="livro-actions">' +
       '<button type="button" class="btn-acao btn-editar-leitor" data-id="' + id + '">Editar</button>' +
       '<button type="button" class="btn-acao btn-excluir-leitor" data-id="' + id + '">Excluir</button>' +
-      '</div></div>';
+      '</div></td></tr>';
   }).join('');
+  cont.innerHTML = '<table class="acervo-tabela"><thead><tr><th>Nome</th><th>Matrícula</th><th>Tipo</th><th>Curso/Turma</th><th>Situação</th><th></th></tr></thead><tbody>' + linhas + '</tbody></table>';
   cont.querySelectorAll('.btn-editar-leitor').forEach(function (btn) {
     btn.addEventListener('click', function () { abrirEdicaoLeitor(btn.dataset.id); });
   });
@@ -2791,17 +2800,22 @@ function renderUsuariosLista() {
   }
   cont.innerHTML = entradas.map(function (entry) {
     const uid = entry[0], u = entry[1];
+    const ehVoce = uid === (auth && auth.currentUser && auth.currentUser.uid);
     const opcoes = ['pendente', 'bibliotecario', 'administrador'].map(function (n) {
       const rotulo = n.charAt(0).toUpperCase() + n.slice(1);
       return '<option value="' + n + '"' + (u.nivel === n ? ' selected' : '') + '>' + rotulo + '</option>';
     }).join('');
     return '<div class="leitor-row">' +
       '<div class="leitor-info"><strong>' + escapeHtml(u.email || '(sem e-mail)') + '</strong>' +
-      (uid === (auth && auth.currentUser && auth.currentUser.uid) ? '<span class="leitor-meta">esta é a sua conta</span>' : '') +
+      (ehVoce ? '<span class="leitor-meta">esta é a sua conta</span>' : '') +
       '</div>' +
       '<select class="usuario-nivel-select" data-uid="' + uid + '">' + opcoes + '</select>' +
+      (ehVoce ? '' : '<div class="livro-actions"><button type="button" class="btn-acao btn-excluir-usuario" data-uid="' + uid + '">Excluir</button></div>') +
       '</div>';
   }).join('');
+  cont.querySelectorAll('.btn-excluir-usuario').forEach(function (btn) {
+    btn.addEventListener('click', function () { excluirUsuario(btn.dataset.uid); });
+  });
   cont.querySelectorAll('.usuario-nivel-select').forEach(function (sel) {
     sel.addEventListener('change', async function () {
       if (!db) { firebaseIndisponivel(); return; }
@@ -2816,6 +2830,17 @@ function renderUsuariosLista() {
         alert('Erro ao atualizar o nível deste usuário.');
       }
     });
+  });
+}
+
+function excluirUsuario(uid) {
+  if (!usuarioEhAdmin()) { alert('Apenas administradores podem excluir usuários.'); return; }
+  const u = usuariosCache[uid];
+  if (!confirm('Remover o acesso de "' + (u ? (u.email || uid) : uid) + '" a este sistema?\n\nIsso remove o nível de permissão dela aqui dentro. O login continua existindo no Firebase — para impedir que a pessoa entre de vez, também é preciso excluir a conta em Firebase Console → Authentication → Users.')) return;
+  if (!db) { firebaseIndisponivel(); return; }
+  db.ref('usuarios/' + uid).remove().catch(function (err) {
+    console.error(err);
+    alert('Erro ao excluir usuário.');
   });
 }
 
