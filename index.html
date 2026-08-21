@@ -344,10 +344,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   width: 38.1mm; height: 21.2mm; box-sizing: border-box; padding: 1mm;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   overflow: hidden; font-family: 'IBM Plex Mono', monospace; text-align: center;
+  background: transparent;
 }
 .etq-barcode { width: 34mm; height: 8mm; }
 .etq-codigo { font-size: 8pt; font-weight: 700; line-height: 1.15; margin-top: 0.3mm; }
-.etq-endereco { font-size: 7.5pt; line-height: 1.2; color: #fff; border-radius: 1.5mm; padding: 0.5mm 2mm; margin-top: 0.6mm; font-weight: 700; }
+.etq-endereco {
+  font-size: 7.5pt; line-height: 1.2; color: #fff; border-radius: 1.5mm; padding: 0.6mm 2mm;
+  margin-top: 0.8mm; font-weight: 700; width: 100%; box-sizing: border-box;
+}
 
 /* Cupom de empréstimo */
 .cupom-cabecalho { text-align: center; font-weight: 700; font-size: 12pt; font-family: 'Fraunces', serif; margin-bottom: 2mm; }
