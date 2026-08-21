@@ -2647,8 +2647,10 @@ document.getElementById('leitor-cpf').addEventListener('input', async function (
       document.getElementById('leitor-nome').focus();
     }
   } catch (err) {
-    console.error(err);
-    statusEl.textContent = 'Não foi possível verificar o CPF agora.';
+    console.error('Falha ao verificar CPF em /cpfs_leitor — provavelmente falta essa regra publicada no Realtime Database.', err);
+    statusEl.textContent = 'Não deu pra verificar automaticamente agora, mas você pode continuar — o sistema confere de novo ao salvar.';
+    cpfConfirmadoNovoLeitor = cpf;
+    resto.hidden = false;
   }
 });
 
@@ -2673,7 +2675,13 @@ document.getElementById('btn-add-leitor').addEventListener('click', async functi
     try {
       await db.ref('cpfs_leitor/' + cpfDigitos).set(true);
     } catch (errCpf) {
-      alert('Já existe um leitor cadastrado com esse CPF.');
+      console.error('Falha ao reservar CPF em /cpfs_leitor.', errCpf);
+      const jaExisteLocal = Object.values(leitoresCache).some(function (l) { return (l.cpf || '').replace(/\D/g, '') === cpfDigitos; });
+      if (jaExisteLocal) {
+        alert('Já existe um leitor cadastrado com esse CPF.');
+      } else {
+        alert('Não foi possível salvar — provavelmente falta a regra de "cpfs_leitor" publicada no Realtime Database. Veja o console (F12) para detalhes.');
+      }
       return;
     }
     const matricula = await proximaMatriculaLeitor();
