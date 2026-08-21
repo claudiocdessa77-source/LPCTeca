@@ -841,6 +841,26 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   </div>
 </div>
 
+<div id="edit-usuario-modal" class="modal-overlay" hidden>
+  <div class="modal-card" style="max-width:420px;">
+    <h3>Editar usuário</h3>
+    <div class="field"><label>E-mail exibido nesta lista</label><input id="edit-usuario-email" type="email" autocomplete="off" /></div>
+    <div class="field">
+      <label>Nível</label>
+      <select id="edit-usuario-nivel">
+        <option value="pendente">Pendente</option>
+        <option value="bibliotecario">Bibliotecário</option>
+        <option value="administrador">Administrador</option>
+      </select>
+    </div>
+    <p class="etq-ajuda">Isso corrige apenas o que aparece aqui dentro. Para trocar o e-mail de login de verdade, use Firebase Console → Authentication → Users. Para trocar a senha, oriente a pessoa a usar "Esqueci minha senha" na tela de entrada.</p>
+    <div class="form-actions">
+      <button type="button" id="btn-cancelar-edicao-usuario" class="btn btn-ghost">Cancelar</button>
+      <button type="button" id="btn-salvar-edicao-usuario" class="btn btn-primary">Salvar</button>
+    </div>
+  </div>
+</div>
+
 <div id="edit-rua-modal" class="modal-overlay" hidden>
   <div class="modal-card" style="max-width:420px;">
     <h3>Editar rua</h3>
@@ -2810,9 +2830,13 @@ function renderUsuariosLista() {
       (ehVoce ? '<span class="leitor-meta">esta é a sua conta</span>' : '') +
       '</div>' +
       '<select class="usuario-nivel-select" data-uid="' + uid + '">' + opcoes + '</select>' +
-      (ehVoce ? '' : '<div class="livro-actions"><button type="button" class="btn-acao btn-excluir-usuario" data-uid="' + uid + '">Excluir</button></div>') +
-      '</div>';
+      '<div class="livro-actions"><button type="button" class="btn-acao btn-editar-usuario" data-uid="' + uid + '">Editar</button>' +
+      (ehVoce ? '' : '<button type="button" class="btn-acao btn-excluir-usuario" data-uid="' + uid + '">Excluir</button>') +
+      '</div></div>';
   }).join('');
+  cont.querySelectorAll('.btn-editar-usuario').forEach(function (btn) {
+    btn.addEventListener('click', function () { abrirEdicaoUsuario(btn.dataset.uid); });
+  });
   cont.querySelectorAll('.btn-excluir-usuario').forEach(function (btn) {
     btn.addEventListener('click', function () { excluirUsuario(btn.dataset.uid); });
   });
@@ -2832,6 +2856,42 @@ function renderUsuariosLista() {
     });
   });
 }
+
+let editandoUsuarioId = null;
+
+function abrirEdicaoUsuario(uid) {
+  if (!usuarioEhAdmin()) { alert('Apenas administradores podem editar usuários.'); return; }
+  const u = usuariosCache[uid];
+  if (!u) return;
+  editandoUsuarioId = uid;
+  document.getElementById('edit-usuario-email').value = u.email || '';
+  document.getElementById('edit-usuario-nivel').value = u.nivel || 'pendente';
+  document.getElementById('edit-usuario-modal').hidden = false;
+}
+
+document.getElementById('btn-cancelar-edicao-usuario').addEventListener('click', function () {
+  document.getElementById('edit-usuario-modal').hidden = true;
+  editandoUsuarioId = null;
+});
+
+document.getElementById('btn-salvar-edicao-usuario').addEventListener('click', async function () {
+  if (!editandoUsuarioId) return;
+  if (!db) { firebaseIndisponivel(); return; }
+  const email = document.getElementById('edit-usuario-email').value.trim();
+  const nivel = document.getElementById('edit-usuario-nivel').value;
+  try {
+    await db.ref('usuarios/' + editandoUsuarioId).update({ email: email, nivel: nivel });
+    if (editandoUsuarioId === (auth && auth.currentUser && auth.currentUser.uid)) {
+      nivelUsuarioAtual = nivel;
+      atualizarBadgeNivel();
+    }
+    document.getElementById('edit-usuario-modal').hidden = true;
+    editandoUsuarioId = null;
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao salvar usuário.');
+  }
+});
 
 function excluirUsuario(uid) {
   if (!usuarioEhAdmin()) { alert('Apenas administradores podem excluir usuários.'); return; }
