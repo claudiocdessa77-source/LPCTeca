@@ -298,6 +298,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
 #etq-folha, #cupom-emprestimo, #cartao-leitor, #cartoes-folha { display: none; }
 @media print {
+  body { background: #fff !important; }
   body.print-etiquetas * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body.print-etiquetas #etq-folha, body.print-etiquetas #etq-folha * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body.print-etiquetas #etq-folha { display: grid; position: absolute; top: 0; left: 0; grid-template-columns: repeat(5, 38.1mm); grid-auto-rows: 21.2mm; }
@@ -329,6 +330,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   border-radius: 2.5mm; padding: 1.5mm 4mm; color: var(--accent); transform: rotate(-2deg); display: inline-block; align-self: flex-start;
 }
 .cartao-leitor-titulo-doc { font-family: 'IBM Plex Mono', monospace; font-size: 8pt; letter-spacing: .08em; text-transform: uppercase; opacity: .75; margin-top: 2mm; }
+.cartao-leitor-instituicao { font-family: 'IBM Plex Mono', monospace; font-size: 5.5pt; letter-spacing: .03em; text-transform: uppercase; opacity: .65; line-height: 1.4; margin-top: 1.5mm; }
 .cartao-leitor-corpo { margin-top: 5mm; }
 .cartao-leitor-nome { font-size: 15pt; font-weight: 700; line-height: 1.2; margin-bottom: 5mm; }
 .cartao-leitor-linha-info { display: flex; justify-content: space-between; align-items: baseline; font-size: 9.5pt; padding: 2mm 0; border-bottom: 1px solid rgba(255,255,255,.18); }
@@ -439,14 +441,14 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <button class="tab active" data-tab="dashboard">Painel</button>
     <button class="tab" data-tab="cadastro">Cadastrar livro</button>
     <button class="tab" data-tab="acervo">Acervo</button>
+    <button class="tab" data-tab="emprestimo">Empréstimo</button>
+    <button class="tab" data-tab="devolucao">Devolução</button>
+    <button class="tab" data-tab="reservas">Reservas</button>
     <button class="tab" data-tab="etiquetas">Etiquetas</button>
     <button class="tab" data-tab="enderecos">Ruas e prateleiras</button>
     <button class="tab" data-tab="leitores">Leitores</button>
     <button class="tab" data-tab="usuarios">Usuários</button>
     <button class="tab" data-tab="config">Configurações</button>
-    <button class="tab" data-tab="emprestimo">Empréstimo</button>
-    <button class="tab" data-tab="devolucao">Devolução</button>
-    <button class="tab" data-tab="reservas">Reservas</button>
   </nav>
 
   <main class="content">
@@ -750,7 +752,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <div id="dev-lista-sessao" class="etq-lista"></div>
 
       <h3 style="margin-top:28px;">Empréstimos ativos</h3>
-      <input id="ativos-busca" class="search" placeholder="Buscar por título ou leitor…" style="margin-bottom:14px;" />
+      <input id="ativos-busca" class="search" placeholder="Buscar por título, leitor ou CPF…" style="margin-bottom:14px;" />
       <div id="ativos-lista"></div>
     </section>
 
@@ -758,7 +760,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <div class="card" style="margin-bottom:20px;">
         <h3>Nova reserva</h3>
         <div class="form-grid">
-          <div class="field field-wide"><label>Título (sem exemplar disponível)</label><select id="reserva-livro"></select></div>
+          <div class="field field-wide"><label>Título</label><select id="reserva-livro"></select></div>
           <div class="field field-wide">
             <label>Matrícula do leitor</label>
             <div class="scan-row">
@@ -2871,7 +2873,9 @@ document.getElementById('btn-imprimir-cartao-leitor').addEventListener('click', 
 
 function gerarCartaoLeitorHtml(l, svgAttrs) {
   return '<div class="cartao-leitor-item">' +
-    '<div class="cartao-leitor-topo"><span class="cartao-leitor-logo">LPCTeca</span><span class="cartao-leitor-titulo-doc">CARTEIRA DE LEITOR</span></div>' +
+    '<div class="cartao-leitor-topo"><span class="cartao-leitor-logo">LPCTeca</span>' +
+    '<span class="cartao-leitor-instituicao">Centro Estadual de Educação Profissional<br>Luis Pinto de Carvalho</span>' +
+    '<span class="cartao-leitor-titulo-doc">CARTEIRA DE LEITOR</span></div>' +
     '<div class="cartao-leitor-corpo">' +
     '<div class="cartao-leitor-nome">' + escapeHtml(l.nome) + '</div>' +
     '<div class="cartao-leitor-linha-info"><span class="cartao-leitor-rotulo">Tipo</span><span>' + escapeHtml(l.tipo || '—') + '</span></div>' +
@@ -3414,16 +3418,18 @@ async function processarDevolucao(valor) {
 
   const entry = encontrarExemplarPorEntrada(codigo);
   if (!entry) { statusEl.textContent = 'Exemplar "' + codigo + '" não encontrado.'; inputEl.focus(); return; }
-  const exemplarId = entry[0], exemplar = entry[1];
+  await registrarDevolucaoDeExemplar(entry[0], entry[1], statusEl);
+  inputEl.focus();
+}
 
+async function registrarDevolucaoDeExemplar(exemplarId, exemplar, statusEl) {
   if (exemplar.status !== 'Emprestado' || !exemplar.emprestimo_ativo_id) {
-    statusEl.textContent = 'Exemplar ' + exemplar.codigo + ' não está com empréstimo em aberto (status atual: ' + exemplar.status + ').';
-    inputEl.focus();
+    if (statusEl) statusEl.textContent = 'Exemplar ' + exemplar.codigo + ' não está com empréstimo em aberto (status atual: ' + exemplar.status + ').';
     return;
   }
   if (!db) { firebaseIndisponivel(); return; }
 
-  statusEl.textContent = 'Registrando devolução…';
+  if (statusEl) statusEl.textContent = 'Registrando devolução…';
   try {
     const agora = Date.now();
     const emprestimo = emprestimosCache[exemplar.emprestimo_ativo_id];
@@ -3453,12 +3459,11 @@ async function processarDevolucao(valor) {
     }
     devolucoesDaSessao.unshift({ codigo: exemplar.codigo, titulo: livro ? livro.titulo : '(título desconhecido)', atrasado: atrasado });
     renderListaSessaoDevolucao();
-    statusEl.textContent = mensagem;
+    if (statusEl) statusEl.textContent = mensagem;
   } catch (err) {
     console.error(err);
-    statusEl.textContent = 'Erro ao registrar devolução.';
+    if (statusEl) statusEl.textContent = 'Erro ao registrar devolução.';
   }
-  inputEl.focus();
 }
 
 function renderListaSessaoDevolucao() {
@@ -3489,13 +3494,16 @@ function renderListaAtivos() {
   const cont = document.getElementById('ativos-lista');
   if (!cont) return;
   const termo = (document.getElementById('ativos-busca').value || '').trim().toLowerCase();
+  const termoDigitos = termo.replace(/\D/g, '');
   const ativos = Object.entries(emprestimosCache).filter(function (e) { return !e[1].data_devolucao_real; });
   const filtrados = ativos.filter(function (entry) {
     if (!termo) return true;
     const emp = entry[1];
     const livro = livrosCache[emp.livro_id];
     const leitor = leitoresCache[emp.leitor_id];
-    return (livro && livro.titulo || '').toLowerCase().includes(termo) || (leitor && leitor.nome || '').toLowerCase().includes(termo);
+    return (livro && livro.titulo || '').toLowerCase().includes(termo) ||
+      (leitor && leitor.nome || '').toLowerCase().includes(termo) ||
+      (termoDigitos.length >= 3 && leitor && (leitor.cpf || '').replace(/\D/g, '').includes(termoDigitos));
   }).sort(function (a, b) { return (a[1].data_prevista_devolucao || 0) - (b[1].data_prevista_devolucao || 0); });
 
   if (filtrados.length === 0) {
@@ -3513,11 +3521,22 @@ function renderListaAtivos() {
       '<div class="leitor-info"><strong>' + escapeHtml(livro ? livro.titulo : '(título desconhecido)') + '</strong>' +
       '<span class="leitor-meta">' + escapeHtml(leitor ? leitor.nome : '(leitor desconhecido)') + ' · devolver até ' + new Date(emp.data_prevista_devolucao).toLocaleDateString('pt-BR') + (renovacoes ? ' · ' + renovacoes + ' renovação(ões)' : '') + '</span></div>' +
       '<span class="status status-' + (atrasado ? 'suspenso">Atrasado' : 'ativo">No prazo') + '</span>' +
-      '<div class="livro-actions"><button type="button" class="btn-acao btn-renovar" data-id="' + empId + '">Renovar</button></div>' +
-      '</div>';
+      '<div class="livro-actions">' +
+      '<button type="button" class="btn-acao btn-devolver-ativo" data-id="' + empId + '">Devolver</button>' +
+      '<button type="button" class="btn-acao btn-renovar" data-id="' + empId + '">Renovar</button>' +
+      '</div></div>';
   }).join('');
   cont.querySelectorAll('.btn-renovar').forEach(function (btn) {
     btn.addEventListener('click', function () { renovarEmprestimo(btn.dataset.id); });
+  });
+  cont.querySelectorAll('.btn-devolver-ativo').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      const emp = emprestimosCache[btn.dataset.id];
+      if (!emp) return;
+      const exemplar = exemplaresCache[emp.exemplar_id];
+      if (!exemplar) { alert('Exemplar não encontrado.'); return; }
+      await registrarDevolucaoDeExemplar(emp.exemplar_id, exemplar, document.getElementById('dev-status'));
+    });
   });
 }
 
@@ -3559,11 +3578,12 @@ function renderSelectReservaLivro() {
   Object.values(exemplaresCache).forEach(function (ex) {
     if (ex.status === 'Disponível') contagemDisponivel[ex.livro_id] = (contagemDisponivel[ex.livro_id] || 0) + 1;
   });
-  const semDisponivel = Object.entries(livrosCache)
-    .filter(function (e) { return !contagemDisponivel[e[0]]; })
+  const todos = Object.entries(livrosCache)
     .sort(function (a, b) { return (a[1].titulo || '').localeCompare(b[1].titulo || ''); });
-  sel.innerHTML = '<option value="">Selecione…</option>' + semDisponivel.map(function (e) {
-    return '<option value="' + e[0] + '">' + escapeHtml(e[1].titulo) + '</option>';
+  sel.innerHTML = '<option value="">Selecione…</option>' + todos.map(function (e) {
+    const disp = contagemDisponivel[e[0]] || 0;
+    const rotulo = e[1].titulo + (e[1].autores ? ' — ' + e[1].autores : '') + (disp > 0 ? ' (' + disp + ' disponível)' : ' (indisponível)');
+    return '<option value="' + e[0] + '">' + escapeHtml(rotulo) + '</option>';
   }).join('');
   if (atual) sel.value = atual;
 }
