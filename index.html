@@ -631,6 +631,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
             <div class="field field-sm"><label>Curso (opcional)</label><select id="leitor-curso"></select></div>
             <div class="field field-sm"><label>Turma (opcional)</label><select id="leitor-turma-select"></select></div>
             <div class="field field-sm"><label>Contato (opcional)</label><input id="leitor-contato" class="mono" placeholder="(00) 00000-0000" maxlength="15" autocomplete="off" /></div>
+            <div class="field field-sm"><label>E-mail (opcional)</label><input id="leitor-email" type="email" placeholder="nome@exemplo.com" autocomplete="off" /></div>
           </div>
           <p class="etq-ajuda">A matrícula é gerada automaticamente (01LPC + número sequencial) ao salvar. Cursos e turmas são cadastrados em Configurações.</p>
           <button type="button" id="btn-add-leitor" class="btn btn-primary btn-block">Adicionar leitor</button>
@@ -826,6 +827,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <div class="field field-sm"><label>Curso</label><select id="edit-leitor-curso"></select></div>
       <div class="field field-sm"><label>Turma</label><select id="edit-leitor-turma-select"></select></div>
       <div class="field field-sm"><label>Contato</label><input id="edit-leitor-contato" class="mono" placeholder="(00) 00000-0000" maxlength="15" /></div>
+      <div class="field field-sm"><label>E-mail</label><input id="edit-leitor-email" type="email" placeholder="nome@exemplo.com" autocomplete="off" /></div>
       <div class="field field-sm">
         <label>Situação</label>
         <select id="edit-leitor-situacao">
@@ -2693,12 +2695,14 @@ document.getElementById('btn-add-leitor').addEventListener('click', async functi
       curso_id: document.getElementById('leitor-curso').value || null,
       turma_id: document.getElementById('leitor-turma-select').value || null,
       contato: document.getElementById('leitor-contato').value.trim(),
+      email: document.getElementById('leitor-email').value.trim(),
       situacao: 'Ativo',
       criado_em: Date.now()
     });
     document.getElementById('leitor-nome').value = '';
     document.getElementById('leitor-cpf').value = '';
     document.getElementById('leitor-contato').value = '';
+    document.getElementById('leitor-email').value = '';
     document.getElementById('leitor-cpf-status').textContent = '';
     document.getElementById('leitor-resto-form').hidden = true;
     cpfConfirmadoNovoLeitor = null;
@@ -2773,6 +2777,7 @@ function abrirEdicaoLeitor(id) {
     atualizarTurmasDoFormulario('edit-leitor-curso', 'edit-leitor-turma-select');
     document.getElementById('edit-leitor-turma-select').value = l.turma_id || '';
     document.getElementById('edit-leitor-contato').value = l.contato || '';
+    document.getElementById('edit-leitor-email').value = l.email || '';
     document.getElementById('edit-leitor-situacao').value = l.situacao || 'Ativo';
     document.getElementById('edit-leitor-modal').hidden = false;
   });
@@ -2811,6 +2816,7 @@ document.getElementById('btn-salvar-edicao-leitor').addEventListener('click', as
       curso_id: document.getElementById('edit-leitor-curso').value || null,
       turma_id: document.getElementById('edit-leitor-turma-select').value || null,
       contato: document.getElementById('edit-leitor-contato').value.trim(),
+      email: document.getElementById('edit-leitor-email').value.trim(),
       situacao: document.getElementById('edit-leitor-situacao').value
     });
     if (cpfMudou && cpfDigitosAntigo) {
