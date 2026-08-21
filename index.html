@@ -830,6 +830,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         <h3>Empréstimos atrasados</h3>
         <div id="dash-atrasados"></div>
       </div>
+      <div class="dash-secao" id="dash-secao-reservas" style="margin-top:20px;">
+        <h3>Reservas ativas</h3>
+        <div id="dash-reservas-lista"></div>
+      </div>
     </section>
 
   </main>
@@ -2110,10 +2114,12 @@ function renderAcervo() {
       const prat = prateleirasCache[ex.prateleira_id];
       const endereco = rua ? (rua.nome + (prat ? ' · Prateleira ' + String(prat.numero).padStart(2, '0') : '')) : 'sem endereço';
       const corChip = rua && rua.cor ? rua.cor : '';
+      const emprestimoAtivo = ex.status === 'Emprestado' && ex.emprestimo_ativo_id ? emprestimosCache[ex.emprestimo_ativo_id] : null;
+      const rotuloStatus = emprestimoAtivo ? ex.status + ' até ' + new Date(emprestimoAtivo.data_prevista_devolucao).toLocaleDateString('pt-BR') : ex.status;
       return '<div class="exemplar-row">' +
         '<svg class="barcode" data-code="' + ex.codigo + '"></svg>' +
         '<span class="endereco-chip"' + (corChip ? ' style="background:' + corChip + '"' : '') + '>' + escapeHtml(endereco) + '</span>' +
-        '<span class="status status-' + slug(ex.status) + '">' + escapeHtml(ex.status) + '</span>' +
+        '<span class="status status-' + slug(ex.status) + '">' + escapeHtml(rotuloStatus) + '</span>' +
         '<button class="btn-excluir-exemplar" data-id="' + exId + '" title="Excluir exemplar">✕</button>' +
         '</div>';
     }).join('') || '<span class="chip chip-empty">sem exemplares</span>';
@@ -2389,14 +2395,17 @@ function excluirLivro(livroId) {
     if (!db) { firebaseIndisponivel(); return; }
     const livro = livrosCache[livroId];
     const titulo = livro ? livro.titulo : 'este título';
-    const qtdExemplares = Object.values(exemplaresCache).filter(function (ex) { return ex.livro_id === livroId; }).length;
-    if (!confirm('Excluir "' + titulo + '" e ' + qtdExemplares + ' exemplar(es) vinculado(s)? Essa ação não pode ser desfeita.')) return;
+    const exemplaresDoLivro = Object.entries(exemplaresCache).filter(function (e) { return e[1].livro_id === livroId; });
+    const emUso = exemplaresDoLivro.filter(function (e) { return e[1].status === 'Emprestado' || e[1].status === 'Reservado'; });
+    if (emUso.length > 0) {
+      alert('Não é possível excluir "' + titulo + '": ' + emUso.length + ' exemplar(es) está(ão) emprestado(s) ou reservado(s). Processe a devolução ou cancele a reserva antes de excluir.');
+      return;
+    }
+    if (!confirm('Excluir "' + titulo + '" e ' + exemplaresDoLivro.length + ' exemplar(es) vinculado(s)? Essa ação não pode ser desfeita.')) return;
     try {
       const updates = {};
       updates['livros/' + livroId] = null;
-      Object.entries(exemplaresCache).forEach(function (entry) {
-        if (entry[1].livro_id === livroId) updates['exemplares/' + entry[0]] = null;
-      });
+      exemplaresDoLivro.forEach(function (entry) { updates['exemplares/' + entry[0]] = null; });
       await db.ref().update(updates);
     } catch (err) {
       console.error(err);
@@ -2408,6 +2417,11 @@ function excluirLivro(livroId) {
 function excluirExemplar(exemplarId) {
   exigirNivel('administrador', async function () {
     if (!db) { firebaseIndisponivel(); return; }
+    const exemplar = exemplaresCache[exemplarId];
+    if (exemplar && (exemplar.status === 'Emprestado' || exemplar.status === 'Reservado')) {
+      alert('Não é possível excluir: este exemplar está "' + exemplar.status + '". Processe a devolução ou cancele a reserva antes de excluir.');
+      return;
+    }
     if (!confirm('Excluir este exemplar? Essa ação não pode ser desfeita.')) return;
     try {
       await db.ref('exemplares/' + exemplarId).remove();
@@ -2581,6 +2595,22 @@ function renderDashboard() {
 
   const reservasProntas = Object.values(reservasCache).filter(function (r) { return r.status === 'Disponivel'; }).length;
   document.getElementById('dash-reservas-num').textContent = reservasProntas;
+
+  const reservasAtivas = Object.entries(reservasCache).filter(function (e) { return e[1].status === 'Aguardando' || e[1].status === 'Disponivel'; })
+    .sort(function (a, b) { return (a[1].criado_em || 0) - (b[1].criado_em || 0); });
+  const contReservas = document.getElementById('dash-reservas-lista');
+  if (reservasAtivas.length === 0) {
+    contReservas.innerHTML = '<p class="empty">Nenhuma reserva ativa.</p>';
+  } else {
+    contReservas.innerHTML = reservasAtivas.map(function (entry) {
+      const r = entry[1];
+      const livro = livrosCache[r.livro_id];
+      const leitor = leitoresCache[r.leitor_id];
+      const pronta = r.status === 'Disponivel';
+      return '<div class="dash-recente-item"><span><strong>' + escapeHtml(livro ? livro.titulo : '(título desconhecido)') + '</strong> — ' + escapeHtml(leitor ? leitor.nome : '(leitor desconhecido)') + '</span>' +
+        '<span class="status status-' + (pronta ? 'ativo">Pronta' : 'bloqueado">Aguardando') + '</span></div>';
+    }).join('');
+  }
 }
 
 document.getElementById('dash-titulos').addEventListener('click', function () { irParaAcervoComFiltro(''); });
@@ -3535,15 +3565,18 @@ function renderListaAtivos() {
     const empId = entry[0], emp = entry[1];
     const livro = livrosCache[emp.livro_id];
     const leitor = leitoresCache[emp.leitor_id];
+    const exemplarExiste = !!exemplaresCache[emp.exemplar_id];
     const atrasado = emp.data_prevista_devolucao < agora;
     const renovacoes = emp.renovacoes || 0;
     return '<div class="leitor-row">' +
-      '<div class="leitor-info"><strong>' + escapeHtml(livro ? livro.titulo : '(título desconhecido)') + '</strong>' +
-      '<span class="leitor-meta">' + escapeHtml(leitor ? leitor.nome : '(leitor desconhecido)') + ' · devolver até ' + new Date(emp.data_prevista_devolucao).toLocaleDateString('pt-BR') + (renovacoes ? ' · ' + renovacoes + ' renovação(ões)' : '') + '</span></div>' +
+      '<div class="leitor-info"><strong>' + escapeHtml(livro ? livro.titulo : '(título excluído)') + '</strong>' +
+      '<span class="leitor-meta">' + escapeHtml(leitor ? leitor.nome : '(leitor desconhecido)') + ' · devolver até ' + new Date(emp.data_prevista_devolucao).toLocaleDateString('pt-BR') + (renovacoes ? ' · ' + renovacoes + ' renovação(ões)' : '') + (!exemplarExiste ? ' · exemplar não existe mais no acervo' : '') + '</span></div>' +
       '<span class="status status-' + (atrasado ? 'suspenso">Atrasado' : 'ativo">No prazo') + '</span>' +
       '<div class="livro-actions">' +
-      '<button type="button" class="btn-acao btn-devolver-ativo" data-id="' + empId + '">Devolver</button>' +
-      '<button type="button" class="btn-acao btn-renovar" data-id="' + empId + '">Renovar</button>' +
+      (exemplarExiste ?
+        '<button type="button" class="btn-acao btn-devolver-ativo" data-id="' + empId + '">Devolver</button>' +
+        '<button type="button" class="btn-acao btn-renovar" data-id="' + empId + '">Renovar</button>'
+        : '<button type="button" class="btn-acao btn-encerrar-orfao" data-id="' + empId + '">Encerrar registro</button>') +
       '</div></div>';
   }).join('');
   cont.querySelectorAll('.btn-renovar').forEach(function (btn) {
@@ -3556,6 +3589,19 @@ function renderListaAtivos() {
       const exemplar = exemplaresCache[emp.exemplar_id];
       if (!exemplar) { alert('Exemplar não encontrado.'); return; }
       await registrarDevolucaoDeExemplar(emp.exemplar_id, exemplar, document.getElementById('dev-status'));
+    });
+  });
+  cont.querySelectorAll('.btn-encerrar-orfao').forEach(function (btn) {
+    btn.addEventListener('click', async function () {
+      if (!usuarioEhAdmin()) { alert('Apenas administradores podem encerrar um registro órfão.'); return; }
+      if (!confirm('O exemplar deste empréstimo foi excluído do acervo. Encerrar este registro manualmente (sem afetar nenhum exemplar, já que ele não existe mais)?')) return;
+      if (!db) { firebaseIndisponivel(); return; }
+      try {
+        await db.ref('emprestimos/' + btn.dataset.id + '/data_devolucao_real').set(Date.now());
+      } catch (err) {
+        console.error(err);
+        alert('Erro ao encerrar registro.');
+      }
     });
   });
 }
@@ -3807,7 +3853,7 @@ async function efetivarReserva(reservaId) {
 }
 
 document.getElementById('dash-reservas-card').addEventListener('click', function () {
-  document.querySelector('.tab[data-tab="reservas"]').click();
+  document.getElementById('dash-secao-reservas').scrollIntoView({ behavior: 'smooth' });
 });
 
 function slug(s) {
