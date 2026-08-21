@@ -296,7 +296,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .etq-linha:last-child { border-bottom: none; }
 .etq-linha span:nth-child(3) { flex: 1; }
 
-#etq-folha, #cupom-emprestimo, #cartao-leitor { display: none; }
+#etq-folha, #cupom-emprestimo, #cartao-leitor, #cartoes-folha { display: none; }
 @media print {
   body.print-etiquetas * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body.print-etiquetas #etq-folha, body.print-etiquetas #etq-folha * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
@@ -309,6 +309,10 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
   body.print-cartao * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body.print-cartao #cartao-leitor, body.print-cartao #cartao-leitor * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body.print-cartao #cartao-leitor { display: block; position: absolute; top: 0; left: 0; }
+
+  body.print-cartoes * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+  body.print-cartoes #cartoes-folha, body.print-cartoes #cartoes-folha * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+  body.print-cartoes #cartoes-folha { display: grid; position: absolute; top: 0; left: 0; grid-template-columns: repeat(2, 85.6mm); grid-auto-rows: 53.98mm; }
 
   @page { margin: 0; }
 }
@@ -329,6 +333,12 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .cartao-leitor-sub { font-family: 'IBM Plex Mono', monospace; font-size: 7pt; opacity: .8; margin-top: 1mm; }
 .cartao-leitor-barcode { background: #fff; border-radius: 1.5mm; padding: 2mm; margin-top: 2mm; text-align: center; }
 .cartao-leitor-barcode svg { width: 100%; height: 11mm; }
+
+/* Folha com vários cartões, para corte */
+.cartoes-folha-celula { width: 85.6mm; height: 53.98mm; box-sizing: border-box; border: 1px dashed #999; padding: 1.2mm; }
+.cartoes-folha-celula .cartao-leitor-item { width: 100%; height: 100%; padding: 4mm; }
+.cartoes-folha-celula .cartao-leitor-nome { font-size: 10pt; }
+.cartoes-folha-celula .cartao-leitor-logo { font-size: 11pt; }
 
 .etq-item {
   width: 38.1mm; height: 21.2mm; box-sizing: border-box; padding: 1mm;
@@ -637,6 +647,13 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <button type="button" id="btn-add-leitor" class="btn btn-primary btn-block">Adicionar leitor</button>
         </div>
       </div>
+      <div class="etq-row">
+        <button type="button" id="btn-selecionar-todos-leitores" class="btn btn-ghost">Selecionar todos</button>
+        <button type="button" id="btn-limpar-selecao-leitores" class="btn btn-ghost">Limpar seleção</button>
+        <span id="leitores-contagem" class="etq-contagem">0 selecionado(s)</span>
+        <button type="button" id="btn-imprimir-cartoes-selecionados" class="btn btn-primary">Imprimir cartões selecionados</button>
+      </div>
+      <p class="etq-ajuda">Cartões saem numa folha A4, 2 colunas × 5 linhas (10 por folha), com linha tracejada indicando onde cortar.</p>
       <div id="leitores-lista"></div>
     </section>
 
@@ -756,6 +773,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
     <div id="cupom-emprestimo"></div>
     <div id="cartao-leitor"></div>
+    <div id="cartoes-folha"></div>
 
     <section id="panel-dashboard" class="panel active">
       <div class="dash-topo">
@@ -2744,6 +2762,7 @@ function renderLeitoresLista() {
     const id = entry[0], l = entry[1];
     const cursoTurma = nomeCursoTurma(l);
     return '<tr>' +
+      '<td><input type="checkbox" class="leitor-check" value="' + id + '" /></td>' +
       '<td><strong>' + escapeHtml(l.nome) + '</strong></td>' +
       '<td class="mono">' + escapeHtml(l.matricula || '') + '</td>' +
       '<td>' + escapeHtml(l.tipo || '') + '</td>' +
@@ -2755,7 +2774,11 @@ function renderLeitoresLista() {
       '<button type="button" class="btn-acao btn-excluir-leitor" data-id="' + id + '">Excluir</button>' +
       '</div></td></tr>';
   }).join('');
-  cont.innerHTML = '<table class="acervo-tabela"><thead><tr><th>Nome</th><th>Matrícula</th><th>Tipo</th><th>Curso/Turma</th><th>Situação</th><th></th></tr></thead><tbody>' + linhas + '</tbody></table>';
+  cont.innerHTML = '<table class="acervo-tabela"><thead><tr><th></th><th>Nome</th><th>Matrícula</th><th>Tipo</th><th>Curso/Turma</th><th>Situação</th><th></th></tr></thead><tbody>' + linhas + '</tbody></table>';
+  cont.querySelectorAll('.leitor-check').forEach(function (chk) {
+    chk.addEventListener('change', atualizarContagemLeitoresSelecionados);
+  });
+  atualizarContagemLeitoresSelecionados();
   cont.querySelectorAll('.btn-cartao-leitor').forEach(function (btn) {
     btn.addEventListener('click', function () { imprimirCartaoLeitor(btn.dataset.id); });
   });
@@ -2860,6 +2883,47 @@ function imprimirCartaoLeitor(leitorId) {
   window.print();
   document.body.classList.remove('print-cartao');
 }
+
+function atualizarContagemLeitoresSelecionados() {
+  const n = document.querySelectorAll('.leitor-check:checked').length;
+  document.getElementById('leitores-contagem').textContent = n + ' selecionado(s)';
+}
+
+document.getElementById('btn-selecionar-todos-leitores').addEventListener('click', function () {
+  document.querySelectorAll('.leitor-check').forEach(function (chk) { chk.checked = true; });
+  atualizarContagemLeitoresSelecionados();
+});
+document.getElementById('btn-limpar-selecao-leitores').addEventListener('click', function () {
+  document.querySelectorAll('.leitor-check').forEach(function (chk) { chk.checked = false; });
+  atualizarContagemLeitoresSelecionados();
+});
+
+document.getElementById('btn-imprimir-cartoes-selecionados').addEventListener('click', function () {
+  const ids = Array.from(document.querySelectorAll('.leitor-check:checked')).map(function (c) { return c.value; });
+  if (ids.length === 0) { alert('Selecione ao menos um leitor.'); return; }
+
+  const cont = document.getElementById('cartoes-folha');
+  cont.innerHTML = ids.map(function (id) {
+    const l = leitoresCache[id];
+    if (!l) return '';
+    return '<div class="cartoes-folha-celula"><div class="cartao-leitor-item">' +
+      '<div class="cartao-leitor-topo"><span class="cartao-leitor-logo">LPCTeca</span><span class="cartao-leitor-tipo">' + escapeHtml(l.tipo || '') + '<br>Carteira de leitor</span></div>' +
+      '<div><div class="cartao-leitor-nome">' + escapeHtml(l.nome) + '</div>' +
+      '<div class="cartao-leitor-sub">Mat. ' + escapeHtml(l.matricula || '') + (nomeCursoTurma(l) ? ' · ' + escapeHtml(nomeCursoTurma(l)) : '') + '</div>' +
+      '<div class="cartao-leitor-barcode"><svg class="cartoes-folha-barcode" data-code="' + escapeHtml(l.matricula || '') + '"></svg></div></div>' +
+      '</div></div>';
+  }).join('');
+
+  cont.querySelectorAll('.cartoes-folha-barcode').forEach(function (svg) {
+    try {
+      JsBarcode(svg, svg.dataset.code, { format: 'CODE128', height: 26, margin: 0, fontSize: 9 });
+    } catch (e) { /* ignora */ }
+  });
+
+  document.body.classList.add('print-cartoes');
+  window.print();
+  document.body.classList.remove('print-cartoes');
+});
 
 function excluirLeitor(id) {
   exigirNivel('administrador', async function () {
