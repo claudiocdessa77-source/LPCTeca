@@ -226,6 +226,19 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .search { width: 100%; padding: 11px 14px; border: 1px solid var(--line); border-radius: 8px; font-size: 14px; font-family: inherit; }
 .empty { color: var(--ink-soft); font-style: italic; padding: 24px 0; }
 .livro-card { display: flex; gap: 16px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+
+/* Tabela do acervo */
+.acervo-tabela { width: 100%; border-collapse: collapse; }
+.acervo-tabela th { text-align: left; font-family: 'IBM Plex Mono', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: var(--ink-soft); padding: 8px 10px; border-bottom: 2px solid var(--ink); }
+.acervo-linha { cursor: pointer; border-bottom: 1px solid var(--line); }
+.acervo-linha:hover { background: var(--accent-soft); }
+.acervo-linha td { padding: 8px 10px; font-size: 13px; vertical-align: middle; }
+.acervo-linha-capa { width: 34px; height: 48px; object-fit: cover; border-radius: 3px; flex-shrink: 0; display: block; }
+.acervo-linha-capa-vazia { width: 34px; height: 48px; background: var(--accent-soft); border-radius: 3px; }
+.acervo-linha-titulo { font-weight: 600; }
+.acervo-linha-meta { font-size: 11px; color: var(--ink-soft); }
+.acervo-detalhe-row td { padding: 0; border-bottom: 1px solid var(--line); }
+.acervo-detalhe { padding: 16px; background: var(--paper); }
 .livro-capa { width: 56px; height: 80px; object-fit: cover; border-radius: 4px; flex-shrink: 0; }
 .livro-capa-vazia { display: flex; align-items: center; justify-content: center; background: var(--accent-soft); color: var(--accent); font-size: 10px; text-align: center; font-family: 'IBM Plex Mono', monospace; }
 .livro-info h3 { font-size: 16px; margin-bottom: 2px; }
@@ -283,19 +296,40 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 .etq-linha:last-child { border-bottom: none; }
 .etq-linha span:nth-child(3) { flex: 1; }
 
-#etq-folha, #cupom-emprestimo { display: none; }
+#etq-folha, #cupom-emprestimo, #cartao-leitor { display: none; }
 @media print {
   body.print-etiquetas * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body.print-etiquetas #etq-folha, body.print-etiquetas #etq-folha * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
   body.print-etiquetas #etq-folha { display: grid; position: absolute; top: 0; left: 0; grid-template-columns: repeat(5, 38.1mm); grid-auto-rows: 21.2mm; }
-  body.print-etiquetas { }
 
   body.print-cupom * { visibility: hidden; }
   body.print-cupom #cupom-emprestimo, body.print-cupom #cupom-emprestimo * { visibility: visible; }
   body.print-cupom #cupom-emprestimo { display: block; position: absolute; top: 0; left: 0; width: 72mm; padding: 3mm; box-sizing: border-box; }
 
+  body.print-cartao * { visibility: hidden; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+  body.print-cartao #cartao-leitor, body.print-cartao #cartao-leitor * { visibility: visible; -webkit-print-color-adjust: exact; print-color-adjust: exact; color-adjust: exact; }
+  body.print-cartao #cartao-leitor { display: block; position: absolute; top: 0; left: 0; }
+
   @page { margin: 0; }
 }
+
+/* Cartão do leitor */
+.cartao-leitor-item {
+  width: 85.6mm; height: 53.98mm; box-sizing: border-box; border-radius: 3mm; overflow: hidden;
+  background: linear-gradient(135deg, var(--ink) 0%, #24384f 100%); color: #fff; position: relative;
+  font-family: 'Inter', sans-serif; padding: 5mm; display: flex; flex-direction: column; justify-content: space-between;
+}
+.cartao-leitor-topo { display: flex; justify-content: space-between; align-items: flex-start; }
+.cartao-leitor-logo {
+  font-family: 'Fraunces', serif; font-weight: 700; font-size: 13pt; border: 1.2pt solid var(--accent);
+  border-radius: 2mm; padding: 1mm 3mm; color: var(--accent); transform: rotate(-2deg); display: inline-block;
+}
+.cartao-leitor-tipo { font-family: 'IBM Plex Mono', monospace; font-size: 7pt; letter-spacing: .05em; text-transform: uppercase; opacity: .85; text-align: right; }
+.cartao-leitor-nome { font-size: 12pt; font-weight: 700; margin-top: 2mm; line-height: 1.2; }
+.cartao-leitor-sub { font-family: 'IBM Plex Mono', monospace; font-size: 7pt; opacity: .8; margin-top: 1mm; }
+.cartao-leitor-barcode { background: #fff; border-radius: 1.5mm; padding: 2mm; margin-top: 2mm; text-align: center; }
+.cartao-leitor-barcode svg { width: 100%; height: 11mm; }
+
 .etq-item {
   width: 38.1mm; height: 21.2mm; box-sizing: border-box; padding: 1mm;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -411,6 +445,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
         </div>
         <div id="scan-status" class="scan-status"></div>
       </div>
+
+      <div class="import-divisor">OU SEM ESCANEAR</div>
+      <button type="button" id="btn-cadastro-manual-direto" class="btn btn-ghost btn-block" style="margin-bottom:18px;">✏️ Cadastrar manualmente, digitando os dados</button>
 
       <div class="import-divisor">OU IMPORTAR POR PLANILHA</div>
 
@@ -572,13 +609,29 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
     <section id="panel-leitores" class="panel">
       <div class="panel-head">
-        <input id="leitor-busca" class="search" placeholder="Buscar por nome ou matrícula…" />
+        <input id="leitor-busca" class="search" placeholder="Buscar por nome, matrícula ou CPF…" />
       </div>
+
+      <div class="enderecos-grid" style="margin-bottom:20px;">
+        <div class="card">
+          <h3>Novo curso</h3>
+          <div class="field"><label>Nome do curso</label><input id="curso-nome" placeholder="Administração" /></div>
+          <button id="btn-add-curso" class="btn btn-primary btn-block">Adicionar curso</button>
+        </div>
+        <div class="card">
+          <h3>Nova turma</h3>
+          <div class="field"><label>Curso</label><select id="turma-curso"></select></div>
+          <div class="field"><label>Nome da turma</label><input id="turma-nome" placeholder="RH 2026.1 — Noturno" /></div>
+          <button id="btn-add-turma" class="btn btn-primary btn-block">Adicionar turma</button>
+        </div>
+      </div>
+      <div id="cursos-lista" style="margin-bottom:20px;"></div>
+
       <div class="card" style="margin-bottom:20px;">
         <h3>Novo leitor</h3>
         <div class="form-grid">
           <div class="field field-wide"><label>Nome completo *</label><input id="leitor-nome" /></div>
-          <div class="field field-sm"><label>Matrícula *</label><input id="leitor-matricula" /></div>
+          <div class="field field-sm"><label>CPF *</label><input id="leitor-cpf" class="mono" placeholder="000.000.000-00" maxlength="14" /></div>
           <div class="field field-sm">
             <label>Tipo *</label>
             <select id="leitor-tipo">
@@ -587,9 +640,11 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
               <option value="Servidor">Servidor</option>
             </select>
           </div>
-          <div class="field field-sm"><label>Turma/Curso (opcional)</label><input id="leitor-turma" /></div>
-          <div class="field field-sm"><label>Contato (opcional)</label><input id="leitor-contato" /></div>
+          <div class="field field-sm"><label>Curso (opcional)</label><select id="leitor-curso"></select></div>
+          <div class="field field-sm"><label>Turma (opcional)</label><select id="leitor-turma-select"></select></div>
+          <div class="field field-sm"><label>Contato (opcional)</label><input id="leitor-contato" class="mono" placeholder="(00) 00000-0000" maxlength="15" /></div>
         </div>
+        <p class="etq-ajuda">A matrícula é gerada automaticamente (8 dígitos, sequencial) ao salvar.</p>
         <button type="button" id="btn-add-leitor" class="btn btn-primary btn-block">Adicionar leitor</button>
       </div>
       <div id="leitores-lista"></div>
@@ -618,7 +673,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
 
     <section id="panel-emprestimo" class="panel">
       <div class="scan-card">
-        <label class="scan-label" for="emp-leitor-input">Escaneie a matrícula do leitor ou digite e pressione Enter</label>
+        <label class="scan-label" for="emp-leitor-input">Escaneie a matrícula, ou digite matrícula/CPF/nome e pressione Enter</label>
         <div class="scan-row">
           <input id="emp-leitor-input" class="scan-input mono" autocomplete="off" placeholder="Matrícula do leitor" />
           <button type="button" id="btn-limpar-emp-leitor" class="btn-clear" title="Limpar">✕</button>
@@ -689,6 +744,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     </section>
 
     <div id="cupom-emprestimo"></div>
+    <div id="cartao-leitor"></div>
 
     <section id="panel-dashboard" class="panel active">
       <div class="dash-topo">
@@ -749,7 +805,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
     <h3>Editar leitor</h3>
     <div class="form-grid">
       <div class="field field-wide"><label>Nome completo *</label><input id="edit-leitor-nome" /></div>
-      <div class="field field-sm"><label>Matrícula *</label><input id="edit-leitor-matricula" /></div>
+      <div class="field field-sm"><label>Matrícula</label><input id="edit-leitor-matricula" disabled /></div>
+      <div class="field field-sm"><label>CPF *</label><input id="edit-leitor-cpf" class="mono" placeholder="000.000.000-00" maxlength="14" /></div>
       <div class="field field-sm">
         <label>Tipo *</label>
         <select id="edit-leitor-tipo">
@@ -758,8 +815,9 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
           <option value="Servidor">Servidor</option>
         </select>
       </div>
-      <div class="field field-sm"><label>Turma/Curso</label><input id="edit-leitor-turma" /></div>
-      <div class="field field-sm"><label>Contato</label><input id="edit-leitor-contato" /></div>
+      <div class="field field-sm"><label>Curso</label><select id="edit-leitor-curso"></select></div>
+      <div class="field field-sm"><label>Turma</label><select id="edit-leitor-turma-select"></select></div>
+      <div class="field field-sm"><label>Contato</label><input id="edit-leitor-contato" class="mono" placeholder="(00) 00000-0000" maxlength="15" /></div>
       <div class="field field-sm">
         <label>Situação</label>
         <select id="edit-leitor-situacao">
@@ -773,6 +831,8 @@ a:focus-visible, button:focus-visible, input:focus-visible, select:focus-visible
       <button type="button" id="btn-cancelar-edicao-leitor" class="btn btn-ghost">Cancelar</button>
       <button type="button" id="btn-salvar-edicao-leitor" class="btn btn-primary">Salvar</button>
     </div>
+    <hr class="modal-divider" />
+    <button type="button" id="btn-imprimir-cartao-leitor" class="btn btn-ghost btn-block">🪪 Imprimir cartão do leitor</button>
   </div>
 </div>
 
@@ -985,6 +1045,8 @@ let leitoresCache = {};
 let usuariosCache = {};
 let emprestimosCache = {};
 let reservasCache = {};
+let cursosCache = {};
+let turmasCache = {};
 const PALETA_CORES = ['#C0392B', '#D9822B', '#C9A227', '#2F6B4F', '#1F7A6C', '#2E6F9E', '#3E4C9E', '#7A4FA3', '#B0428C', '#6B4A34', '#5B6470', '#22303F'];
 let corRuaSelecionada = PALETA_CORES[0];
 let corRuaEdicaoSelecionada = PALETA_CORES[0];
@@ -1100,6 +1162,17 @@ function attachListeners() {
     renderLeitoresLista();
     renderListaAtivos();
     renderListaReservas();
+  });
+  db.ref('cursos').on('value', function (snap) {
+    cursosCache = snap.val() || {};
+    renderCursosSelects();
+    renderCursosLista();
+  });
+  db.ref('turmas').on('value', function (snap) {
+    turmasCache = snap.val() || {};
+    renderCursosSelects();
+    renderCursosLista();
+    renderLeitoresLista();
   });
   db.ref('usuarios').on('value', function (snap) {
     usuariosCache = snap.val() || {};
@@ -1344,6 +1417,62 @@ function escapeHtml(s) {
   });
 }
 
+// ================= Máscaras e validações =================
+function mascararCPF(valor) {
+  const d = valor.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 3) return d;
+  if (d.length <= 6) return d.replace(/^(\d{3})(\d*)/, '$1.$2');
+  if (d.length <= 9) return d.replace(/^(\d{3})(\d{3})(\d*)/, '$1.$2.$3');
+  return d.replace(/^(\d{3})(\d{3})(\d{3})(\d*)/, '$1.$2.$3-$4');
+}
+
+function mascararTelefone(valor) {
+  const d = valor.replace(/\D/g, '').slice(0, 11);
+  if (d.length <= 2) return d.replace(/^(\d*)/, '($1');
+  if (d.length <= 6) return d.replace(/^(\d{2})(\d*)/, '($1) $2');
+  if (d.length <= 10) return d.replace(/^(\d{2})(\d{4})(\d*)/, '($1) $2-$3');
+  return d.replace(/^(\d{2})(\d{5})(\d*)/, '($1) $2-$3');
+}
+
+function validarCPF(valor) {
+  const cpf = String(valor || '').replace(/\D/g, '');
+  if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+  let soma = 0;
+  for (let i = 0; i < 9; i++) soma += parseInt(cpf[i], 10) * (10 - i);
+  let resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  if (resto !== parseInt(cpf[9], 10)) return false;
+  soma = 0;
+  for (let i = 0; i < 10; i++) soma += parseInt(cpf[i], 10) * (11 - i);
+  resto = (soma * 10) % 11;
+  if (resto === 10 || resto === 11) resto = 0;
+  return resto === parseInt(cpf[10], 10);
+}
+
+function aplicarMascara(inputEl, fnMascara) {
+  inputEl.addEventListener('input', function () {
+    const pos = inputEl.selectionStart;
+    const antes = inputEl.value.length;
+    inputEl.value = fnMascara(inputEl.value);
+    const depois = inputEl.value.length;
+    inputEl.selectionEnd = pos + (depois - antes);
+  });
+}
+
+function codigoCorresponde(codigoArmazenado, valorDigitado) {
+  const cod = String(codigoArmazenado || '');
+  const val = String(valorDigitado || '').trim();
+  if (cod === val) return true;
+  if (!/^\d+$/.test(val)) return false;
+  const numArmazenado = cod.replace(/\D/g, '').replace(/^0+/, '') || '0';
+  const numDigitado = val.replace(/^0+/, '') || '0';
+  return numArmazenado === numDigitado;
+}
+
+function encontrarExemplarPorEntrada(valor) {
+  return Object.entries(exemplaresCache).find(function (e) { return codigoCorresponde(e[1].codigo, valor); });
+}
+
 // ================= Busca do livro por ISBN =================
 const scanInput = document.getElementById('scan-input');
 const scanStatus = document.getElementById('scan-status');
@@ -1421,6 +1550,18 @@ async function iniciarBusca(valor) {
   mostrarFontesExtras(isbn);
   buscaEmAndamento = false;
 }
+
+document.getElementById('btn-cadastro-manual-direto').addEventListener('click', function () {
+  foundCard.hidden = true;
+  existingCard.hidden = true;
+  addExemplarForm.hidden = true;
+  document.getElementById('fontes-extra').hidden = true;
+  limparFormulario();
+  document.getElementById('f-isbn').value = '';
+  scanStatus.textContent = 'Preenchendo manualmente, sem passar pelas APIs.';
+  livroForm.hidden = false;
+  document.getElementById('f-titulo').focus();
+});
 
 
 function mostrarFontesExtras(isbn) {
@@ -1866,10 +2007,19 @@ function renderAcervo() {
     return;
   }
 
-  cont.innerHTML = filtrados.map(function (entry) {
+  const linhas = filtrados.map(function (entry) {
     const id = entry[0], l = entry[1];
     let exemplares = Object.entries(exemplaresCache).filter(function (e) { return e[1].livro_id === id; });
     if (filtroStatusAcervo) exemplares = exemplares.filter(function (e) { return e[1].status === filtroStatusAcervo; });
+
+    const contagemStatus = {};
+    exemplares.forEach(function (e) { contagemStatus[e[1].status] = (contagemStatus[e[1].status] || 0) + 1; });
+    const resumoStatus = Object.keys(contagemStatus).map(function (s) { return contagemStatus[s] + ' ' + s.toLowerCase(); }).join(', ') || 'sem exemplares';
+
+    const capaHtml = l.capa_local ? '<img class="acervo-linha-capa livro-capa-local" data-livro-id="' + id + '" alt="" />' :
+      l.capa_url ? '<img class="acervo-linha-capa" src="' + l.capa_url + '" alt="" />' :
+      '<div class="acervo-linha-capa-vazia"></div>';
+
     const chipsExemplares = exemplares.map(function (e) {
       const exId = e[0], ex = e[1];
       const rua = ruasCache[ex.rua_id];
@@ -1882,22 +2032,37 @@ function renderAcervo() {
         '<span class="status status-' + slug(ex.status) + '">' + escapeHtml(ex.status) + '</span>' +
         '<button class="btn-excluir-exemplar" data-id="' + exId + '" title="Excluir exemplar">✕</button>' +
         '</div>';
-    }).join('');
+    }).join('') || '<span class="chip chip-empty">sem exemplares</span>';
 
-    return '<div class="livro-card">' +
-      (l.capa_local ? '<img class="livro-capa livro-capa-local" data-livro-id="' + id + '" alt="Capa de ' + escapeHtml(l.titulo) + '" /> ' :
-       l.capa_url ? '<img class="livro-capa" src="' + l.capa_url + '" alt="Capa de ' + escapeHtml(l.titulo) + '" />' :
-       '<div class="livro-capa livro-capa-vazia">sem capa</div>') +
-      '<div class="livro-info">' +
-      '<div class="livro-header"><h3>' + escapeHtml(l.titulo) + '</h3>' +
+    const linhaPrincipal = '<tr class="acervo-linha" data-livro-id="' + id + '">' +
+      '<td>' + capaHtml + '</td>' +
+      '<td class="acervo-linha-titulo">' + escapeHtml(l.titulo) + '</td>' +
+      '<td>' + escapeHtml(l.autores || '') + '</td>' +
+      '<td>' + exemplares.length + '</td>' +
+      '<td class="acervo-linha-meta">' + escapeHtml(resumoStatus) + '</td>' +
+      '</tr>';
+
+    const linhaDetalhe = '<tr class="acervo-detalhe-row" data-livro-id="' + id + '" hidden><td colspan="5"><div class="acervo-detalhe">' +
+      '<div class="livro-header"><h3 style="margin:0;">' + escapeHtml(l.titulo) + '</h3>' +
       '<div class="livro-actions">' +
       '<button class="btn-acao btn-editar-livro" data-id="' + id + '">Editar</button>' +
       '<button class="btn-acao btn-excluir-livro" data-id="' + id + '">Excluir</button>' +
       '</div></div>' +
-      '<p class="livro-meta">' + escapeHtml([l.autores, l.editora, l.ano].filter(Boolean).join(' · ')) + '</p>' +
-      '<div class="livro-exemplares">' + (chipsExemplares || '<span class="chip chip-empty">sem exemplares</span>') + '</div>' +
-      '</div></div>';
+      '<p class="livro-meta">' + escapeHtml([l.editora, l.ano, l.isbn].filter(Boolean).join(' · ')) + (l.sinopse ? '<br>' + escapeHtml(l.sinopse) : '') + '</p>' +
+      '<div class="livro-exemplares">' + chipsExemplares + '</div>' +
+      '</div></td></tr>';
+
+    return linhaPrincipal + linhaDetalhe;
   }).join('');
+
+  cont.innerHTML = '<table class="acervo-tabela"><thead><tr><th></th><th>Título</th><th>Autor</th><th>Exemplares</th><th>Status</th></tr></thead><tbody>' + linhas + '</tbody></table>';
+
+  cont.querySelectorAll('.acervo-linha').forEach(function (tr) {
+    tr.addEventListener('click', function () {
+      const detalhe = cont.querySelector('.acervo-detalhe-row[data-livro-id="' + tr.dataset.livroId + '"]');
+      if (detalhe) detalhe.hidden = !detalhe.hidden;
+    });
+  });
 
   cont.querySelectorAll('.livro-capa-local').forEach(function (img) {
     carregarCapaLocalEm(img, img.dataset.livroId);
@@ -1910,13 +2075,13 @@ function renderAcervo() {
   });
 
   cont.querySelectorAll('.btn-editar-livro').forEach(function (btn) {
-    btn.addEventListener('click', function () { abrirEdicaoLivro(btn.dataset.id); });
+    btn.addEventListener('click', function (e) { e.stopPropagation(); abrirEdicaoLivro(btn.dataset.id); });
   });
   cont.querySelectorAll('.btn-excluir-livro').forEach(function (btn) {
-    btn.addEventListener('click', function () { excluirLivro(btn.dataset.id); });
+    btn.addEventListener('click', function (e) { e.stopPropagation(); excluirLivro(btn.dataset.id); });
   });
   cont.querySelectorAll('.btn-excluir-exemplar').forEach(function (btn) {
-    btn.addEventListener('click', function () { excluirExemplar(btn.dataset.id); });
+    btn.addEventListener('click', function (e) { e.stopPropagation(); excluirExemplar(btn.dataset.id); });
   });
 }
 
@@ -2343,30 +2508,127 @@ document.getElementById('dash-etiquetas-pendentes').addEventListener('click', fu
   document.getElementById('btn-selecionar-novos').click();
 });
 
+// ================= Cursos e Turmas =================
+document.getElementById('btn-add-curso').addEventListener('click', function () {
+  if (!db) { firebaseIndisponivel(); return; }
+  const nome = document.getElementById('curso-nome').value.trim();
+  if (!nome) return;
+  const jaExiste = Object.values(cursosCache).some(function (c) { return (c.nome || '').trim().toLowerCase() === nome.toLowerCase(); });
+  if (jaExiste) { alert('Já existe um curso com esse nome.'); return; }
+  db.ref('cursos').push({ nome: nome, criado_em: Date.now() });
+  document.getElementById('curso-nome').value = '';
+});
+
+document.getElementById('turma-curso').addEventListener('change', function () {});
+
+document.getElementById('btn-add-turma').addEventListener('click', function () {
+  if (!db) { firebaseIndisponivel(); return; }
+  const cursoId = document.getElementById('turma-curso').value;
+  const nome = document.getElementById('turma-nome').value.trim();
+  if (!cursoId || !nome) { alert('Selecione o curso e informe o nome da turma.'); return; }
+  const jaExiste = Object.values(turmasCache).some(function (t) { return t.curso_id === cursoId && (t.nome || '').trim().toLowerCase() === nome.toLowerCase(); });
+  if (jaExiste) { alert('Esse curso já tem uma turma com esse nome.'); return; }
+  db.ref('turmas').push({ curso_id: cursoId, nome: nome, criado_em: Date.now() });
+  document.getElementById('turma-nome').value = '';
+});
+
+function renderCursosSelects() {
+  const opcoes = Object.entries(cursosCache).sort(function (a, b) { return (a[1].nome || '').localeCompare(b[1].nome || ''); })
+    .map(function (e) { return '<option value="' + e[0] + '">' + escapeHtml(e[1].nome) + '</option>'; }).join('');
+  [document.getElementById('turma-curso'), document.getElementById('leitor-curso'), document.getElementById('edit-leitor-curso')].forEach(function (sel) {
+    const atual = sel.value;
+    sel.innerHTML = '<option value="">Selecione…</option>' + opcoes;
+    if (atual) sel.value = atual;
+  });
+  atualizarTurmasDoFormulario('leitor-curso', 'leitor-turma-select');
+  atualizarTurmasDoFormulario('edit-leitor-curso', 'edit-leitor-turma-select');
+}
+
+document.getElementById('leitor-curso').addEventListener('change', function () { atualizarTurmasDoFormulario('leitor-curso', 'leitor-turma-select'); });
+document.getElementById('edit-leitor-curso').addEventListener('change', function () { atualizarTurmasDoFormulario('edit-leitor-curso', 'edit-leitor-turma-select'); });
+
+function atualizarTurmasDoFormulario(cursoSelId, turmaSelId) {
+  const cursoId = document.getElementById(cursoSelId).value;
+  const sel = document.getElementById(turmaSelId);
+  const atual = sel.value;
+  sel.innerHTML = '<option value="">Selecione…</option>' + Object.entries(turmasCache)
+    .filter(function (e) { return e[1].curso_id === cursoId; })
+    .sort(function (a, b) { return (a[1].nome || '').localeCompare(b[1].nome || ''); })
+    .map(function (e) { return '<option value="' + e[0] + '">' + escapeHtml(e[1].nome) + '</option>'; }).join('');
+  if (atual) sel.value = atual;
+}
+
+function renderCursosLista() {
+  const cont = document.getElementById('cursos-lista');
+  if (!cont) return;
+  const cursos = Object.entries(cursosCache).sort(function (a, b) { return (a[1].nome || '').localeCompare(b[1].nome || ''); });
+  if (cursos.length === 0) { cont.innerHTML = ''; return; }
+  cont.innerHTML = cursos.map(function (entry) {
+    const id = entry[0], c = entry[1];
+    const turmas = Object.entries(turmasCache).filter(function (t) { return t[1].curso_id === id; })
+      .map(function (t) { return '<span class="chip">' + escapeHtml(t[1].nome) + '</span>'; }).join('') || '<span class="chip chip-empty">sem turmas</span>';
+    return '<div class="rua-row"><div class="rua-nome"><strong>' + escapeHtml(c.nome) + '</strong></div><div class="rua-chips">' + turmas + '</div></div>';
+  }).join('');
+}
+
 // ================= Leitores =================
-document.getElementById('btn-add-leitor').addEventListener('click', function () {
+aplicarMascara(document.getElementById('leitor-cpf'), mascararCPF);
+aplicarMascara(document.getElementById('leitor-contato'), mascararTelefone);
+aplicarMascara(document.getElementById('edit-leitor-cpf'), mascararCPF);
+aplicarMascara(document.getElementById('edit-leitor-contato'), mascararTelefone);
+
+function proximaMatriculaLeitor() {
+  return db.ref('contadores/leitor').transaction(function (atual) { return (atual || 0) + 1; }).then(function (res) {
+    return String(res.snapshot.val()).padStart(8, '0');
+  });
+}
+
+document.getElementById('btn-add-leitor').addEventListener('click', async function () {
   if (!db) { firebaseIndisponivel(); return; }
   const nome = document.getElementById('leitor-nome').value.trim();
-  const matricula = document.getElementById('leitor-matricula').value.trim();
-  if (!nome || !matricula) { alert('Preencha nome e matrícula.'); return; }
-  const jaExiste = Object.values(leitoresCache).some(function (l) { return (l.matricula || '').trim().toLowerCase() === matricula.toLowerCase(); });
-  if (jaExiste) { alert('Já existe um leitor com essa matrícula.'); return; }
-  db.ref('leitores').push({
-    nome: nome,
-    matricula: matricula,
-    tipo: document.getElementById('leitor-tipo').value,
-    turma: document.getElementById('leitor-turma').value.trim(),
-    contato: document.getElementById('leitor-contato').value.trim(),
-    situacao: 'Ativo',
-    criado_em: Date.now()
-  });
-  document.getElementById('leitor-nome').value = '';
-  document.getElementById('leitor-matricula').value = '';
-  document.getElementById('leitor-turma').value = '';
-  document.getElementById('leitor-contato').value = '';
+  const cpf = document.getElementById('leitor-cpf').value.trim();
+  if (!nome || !cpf) { alert('Preencha nome e CPF.'); return; }
+  if (!validarCPF(cpf)) { alert('CPF inválido. Confira os números digitados.'); return; }
+  const cpfDigitos = cpf.replace(/\D/g, '');
+  const jaExiste = Object.values(leitoresCache).some(function (l) { return (l.cpf || '').replace(/\D/g, '') === cpfDigitos; });
+  if (jaExiste) { alert('Já existe um leitor cadastrado com esse CPF.'); return; }
+
+  const btn = document.getElementById('btn-add-leitor');
+  btn.disabled = true;
+  btn.textContent = 'Salvando…';
+  try {
+    const matricula = await proximaMatriculaLeitor();
+    await db.ref('leitores').push({
+      nome: nome,
+      matricula: matricula,
+      cpf: cpf,
+      tipo: document.getElementById('leitor-tipo').value,
+      curso_id: document.getElementById('leitor-curso').value || null,
+      turma_id: document.getElementById('leitor-turma-select').value || null,
+      contato: document.getElementById('leitor-contato').value.trim(),
+      situacao: 'Ativo',
+      criado_em: Date.now()
+    });
+    document.getElementById('leitor-nome').value = '';
+    document.getElementById('leitor-cpf').value = '';
+    document.getElementById('leitor-contato').value = '';
+    alert('Leitor cadastrado. Matrícula gerada: ' + matricula);
+  } catch (err) {
+    console.error(err);
+    alert('Erro ao salvar leitor.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Adicionar leitor';
+  }
 });
 
 document.getElementById('leitor-busca').addEventListener('input', renderLeitoresLista);
+
+function nomeCursoTurma(l) {
+  const curso = l.curso_id ? cursosCache[l.curso_id] : null;
+  const turma = l.turma_id ? turmasCache[l.turma_id] : null;
+  return [curso ? curso.nome : '', turma ? turma.nome : ''].filter(Boolean).join(' · ');
+}
 
 function renderLeitoresLista() {
   const cont = document.getElementById('leitores-lista');
@@ -2376,7 +2638,7 @@ function renderLeitoresLista() {
   const filtrados = entradas.filter(function (entry) {
     if (!termo) return true;
     const l = entry[1];
-    return (l.nome || '').toLowerCase().includes(termo) || (l.matricula || '').toLowerCase().includes(termo);
+    return (l.nome || '').toLowerCase().includes(termo) || (l.matricula || '').toLowerCase().includes(termo) || (l.cpf || '').replace(/\D/g, '').includes(termo.replace(/\D/g, ''));
   });
   if (filtrados.length === 0) {
     cont.innerHTML = '<p class="empty">' + (entradas.length === 0 ? 'Nenhum leitor cadastrado ainda.' : 'Nenhum resultado para essa busca.') + '</p>';
@@ -2384,9 +2646,10 @@ function renderLeitoresLista() {
   }
   cont.innerHTML = filtrados.map(function (entry) {
     const id = entry[0], l = entry[1];
+    const cursoTurma = nomeCursoTurma(l);
     return '<div class="leitor-row">' +
       '<div class="leitor-info"><strong>' + escapeHtml(l.nome) + '</strong>' +
-      '<span class="leitor-meta">' + escapeHtml(l.matricula || '') + ' · ' + escapeHtml(l.tipo || '') + (l.turma ? ' · ' + escapeHtml(l.turma) : '') + '</span></div>' +
+      '<span class="leitor-meta">Mat. ' + escapeHtml(l.matricula || '') + ' · ' + escapeHtml(l.tipo || '') + (cursoTurma ? ' · ' + escapeHtml(cursoTurma) : '') + '</span></div>' +
       '<span class="status status-' + slug(l.situacao || 'Ativo') + '">' + escapeHtml(l.situacao || 'Ativo') + '</span>' +
       '<div class="livro-actions">' +
       '<button type="button" class="btn-acao btn-editar-leitor" data-id="' + id + '">Editar</button>' +
@@ -2410,8 +2673,12 @@ function abrirEdicaoLeitor(id) {
     editandoLeitorId = id;
     document.getElementById('edit-leitor-nome').value = l.nome || '';
     document.getElementById('edit-leitor-matricula').value = l.matricula || '';
+    document.getElementById('edit-leitor-cpf').value = l.cpf || '';
     document.getElementById('edit-leitor-tipo').value = l.tipo || 'Aluno';
-    document.getElementById('edit-leitor-turma').value = l.turma || '';
+    renderCursosSelects();
+    document.getElementById('edit-leitor-curso').value = l.curso_id || '';
+    atualizarTurmasDoFormulario('edit-leitor-curso', 'edit-leitor-turma-select');
+    document.getElementById('edit-leitor-turma-select').value = l.turma_id || '';
     document.getElementById('edit-leitor-contato').value = l.contato || '';
     document.getElementById('edit-leitor-situacao').value = l.situacao || 'Ativo';
     document.getElementById('edit-leitor-modal').hidden = false;
@@ -2427,16 +2694,19 @@ document.getElementById('btn-salvar-edicao-leitor').addEventListener('click', as
   if (!editandoLeitorId) return;
   if (!db) { firebaseIndisponivel(); return; }
   const nome = document.getElementById('edit-leitor-nome').value.trim();
-  const matricula = document.getElementById('edit-leitor-matricula').value.trim();
-  if (!nome || !matricula) { alert('Preencha nome e matrícula.'); return; }
-  const duplicada = Object.entries(leitoresCache).some(function (e) { return e[0] !== editandoLeitorId && (e[1].matricula || '').trim().toLowerCase() === matricula.toLowerCase(); });
-  if (duplicada) { alert('Já existe outro leitor com essa matrícula.'); return; }
+  const cpf = document.getElementById('edit-leitor-cpf').value.trim();
+  if (!nome || !cpf) { alert('Preencha nome e CPF.'); return; }
+  if (!validarCPF(cpf)) { alert('CPF inválido. Confira os números digitados.'); return; }
+  const cpfDigitos = cpf.replace(/\D/g, '');
+  const duplicado = Object.entries(leitoresCache).some(function (e) { return e[0] !== editandoLeitorId && (e[1].cpf || '').replace(/\D/g, '') === cpfDigitos; });
+  if (duplicado) { alert('Já existe outro leitor com esse CPF.'); return; }
   try {
     await db.ref('leitores/' + editandoLeitorId).update({
       nome: nome,
-      matricula: matricula,
+      cpf: cpf,
       tipo: document.getElementById('edit-leitor-tipo').value,
-      turma: document.getElementById('edit-leitor-turma').value.trim(),
+      curso_id: document.getElementById('edit-leitor-curso').value || null,
+      turma_id: document.getElementById('edit-leitor-turma-select').value || null,
       contato: document.getElementById('edit-leitor-contato').value.trim(),
       situacao: document.getElementById('edit-leitor-situacao').value
     });
@@ -2447,6 +2717,30 @@ document.getElementById('btn-salvar-edicao-leitor').addEventListener('click', as
     alert('Erro ao salvar leitor.');
   }
 });
+
+document.getElementById('btn-imprimir-cartao-leitor').addEventListener('click', function () {
+  if (!editandoLeitorId) return;
+  imprimirCartaoLeitor(editandoLeitorId);
+});
+
+function imprimirCartaoLeitor(leitorId) {
+  const l = leitoresCache[leitorId];
+  if (!l) return;
+  const cont = document.getElementById('cartao-leitor');
+  cont.innerHTML =
+    '<div class="cartao-leitor-item">' +
+    '<div class="cartao-leitor-topo"><span class="cartao-leitor-logo">LPCTeca</span><span class="cartao-leitor-tipo">' + escapeHtml(l.tipo || '') + '<br>Carteira de leitor</span></div>' +
+    '<div><div class="cartao-leitor-nome">' + escapeHtml(l.nome) + '</div>' +
+    '<div class="cartao-leitor-sub">Mat. ' + escapeHtml(l.matricula || '') + (nomeCursoTurma(l) ? ' · ' + escapeHtml(nomeCursoTurma(l)) : '') + '</div>' +
+    '<div class="cartao-leitor-barcode"><svg id="cartao-leitor-barcode-svg"></svg></div></div>' +
+    '</div>';
+  try {
+    JsBarcode('#cartao-leitor-barcode-svg', l.matricula || '', { format: 'CODE128', height: 30, margin: 0, fontSize: 11 });
+  } catch (e) { /* ignora */ }
+  document.body.classList.add('print-cartao');
+  window.print();
+  document.body.classList.remove('print-cartao');
+}
 
 function excluirLeitor(id) {
   exigirNivel('administrador', async function () {
@@ -2650,12 +2944,23 @@ function buscarLeitorParaEmprestimo(valor) {
   const termo = (valor || '').trim();
   if (!termo) return;
   const statusEl = document.getElementById('emp-leitor-status');
-  const entry = Object.entries(leitoresCache).find(function (e) { return e[1].matricula === termo; });
-  if (!entry) {
-    statusEl.textContent = 'Leitor não encontrado para a matrícula "' + termo + '". Confira ou cadastre-o na aba Leitores.';
+  const termoDigitos = termo.replace(/\D/g, '');
+  const candidatos = Object.entries(leitoresCache).filter(function (e) {
+    return e[1].matricula === termo ||
+      (termoDigitos.length >= 11 && (e[1].cpf || '').replace(/\D/g, '') === termoDigitos) ||
+      (termo.length >= 3 && (e[1].nome || '').toLowerCase().includes(termo.toLowerCase()));
+  });
+  if (candidatos.length === 0) {
+    statusEl.textContent = 'Leitor não encontrado para "' + termo + '". Confira ou cadastre-o na aba Leitores.';
     document.getElementById('emp-leitor-input').value = '';
     return;
   }
+  if (candidatos.length > 1) {
+    statusEl.textContent = candidatos.length + ' leitores encontrados para "' + termo + '" — digite a matrícula ou CPF completo para escolher um só.';
+    document.getElementById('emp-leitor-input').value = '';
+    return;
+  }
+  const entry = candidatos[0];
   const leitorId = entry[0], leitor = entry[1];
   if ((leitor.situacao || 'Ativo') !== 'Ativo') {
     statusEl.textContent = leitor.nome + ' está com situação "' + leitor.situacao + '" — empréstimo não permitido.';
@@ -2712,12 +3017,12 @@ async function processarEmprestimoExemplar(valor) {
   inputEl.value = '';
   if (!codigo || !leitorEmAtendimento) return;
 
-  const entry = Object.entries(exemplaresCache).find(function (e) { return e[1].codigo === codigo; });
+  const entry = encontrarExemplarPorEntrada(codigo);
   if (!entry) { statusEl.textContent = 'Exemplar "' + codigo + '" não encontrado.'; inputEl.focus(); return; }
   const exemplarId = entry[0], exemplar = entry[1];
 
   if (exemplar.status !== 'Disponível') {
-    statusEl.textContent = 'Exemplar ' + codigo + ' está "' + exemplar.status + '" — não pode ser emprestado agora.';
+    statusEl.textContent = 'Exemplar ' + exemplar.codigo + ' está "' + exemplar.status + '" — não pode ser emprestado agora.';
     inputEl.focus();
     return;
   }
@@ -2750,10 +3055,10 @@ async function processarEmprestimoExemplar(valor) {
     await db.ref().update(updates);
 
     const livro = livrosCache[exemplar.livro_id];
-    emprestimosDaSessao.push({ codigo: codigo, titulo: livro ? livro.titulo : '(título desconhecido)', prevista: prevista });
+    emprestimosDaSessao.push({ codigo: exemplar.codigo, titulo: livro ? livro.titulo : '(título desconhecido)', prevista: prevista });
     renderListaSessaoEmprestimo();
     atualizarContadorLimite();
-    statusEl.textContent = 'Empréstimo registrado: ' + (livro ? livro.titulo : codigo) + '.';
+    statusEl.textContent = 'Empréstimo registrado: ' + (livro ? livro.titulo : exemplar.codigo) + '.';
   } catch (err) {
     console.error(err);
     statusEl.textContent = 'Erro ao registrar empréstimo.';
@@ -2824,12 +3129,12 @@ async function processarDevolucao(valor) {
   inputEl.value = '';
   if (!codigo) return;
 
-  const entry = Object.entries(exemplaresCache).find(function (e) { return e[1].codigo === codigo; });
+  const entry = encontrarExemplarPorEntrada(codigo);
   if (!entry) { statusEl.textContent = 'Exemplar "' + codigo + '" não encontrado.'; inputEl.focus(); return; }
   const exemplarId = entry[0], exemplar = entry[1];
 
   if (exemplar.status !== 'Emprestado' || !exemplar.emprestimo_ativo_id) {
-    statusEl.textContent = 'Exemplar ' + codigo + ' não está com empréstimo em aberto (status atual: ' + exemplar.status + ').';
+    statusEl.textContent = 'Exemplar ' + exemplar.codigo + ' não está com empréstimo em aberto (status atual: ' + exemplar.status + ').';
     inputEl.focus();
     return;
   }
@@ -2858,12 +3163,12 @@ async function processarDevolucao(valor) {
     await db.ref().update(updates);
 
     const livro = livrosCache[exemplar.livro_id];
-    let mensagem = (atrasado ? 'Devolvido com atraso: ' : 'Devolvido: ') + (livro ? livro.titulo : codigo) + '.';
+    let mensagem = (atrasado ? 'Devolvido com atraso: ' : 'Devolvido: ') + (livro ? livro.titulo : exemplar.codigo) + '.';
     if (reservaPendente) {
       const leitorReserva = leitoresCache[reservaPendente[1].leitor_id];
       mensagem += ' Reservado automaticamente para ' + (leitorReserva ? leitorReserva.nome : 'leitor da fila') + ' — avise a pessoa.';
     }
-    devolucoesDaSessao.unshift({ codigo: codigo, titulo: livro ? livro.titulo : '(título desconhecido)', atrasado: atrasado });
+    devolucoesDaSessao.unshift({ codigo: exemplar.codigo, titulo: livro ? livro.titulo : '(título desconhecido)', atrasado: atrasado });
     renderListaSessaoDevolucao();
     statusEl.textContent = mensagem;
   } catch (err) {
