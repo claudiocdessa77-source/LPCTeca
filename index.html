@@ -2665,10 +2665,11 @@ function atualizarTurmasDoFormulario(cursoSelId, turmaSelId) {
   const cursoId = document.getElementById(cursoSelId).value;
   const sel = document.getElementById(turmaSelId);
   const atual = sel.value;
-  sel.innerHTML = '<option value="">Selecione…</option>' + Object.entries(turmasCache)
+  const opcoes = Object.entries(turmasCache)
     .filter(function (e) { return e[1].curso_id === cursoId; })
     .sort(function (a, b) { return (a[1].nome || '').localeCompare(b[1].nome || ''); })
     .map(function (e) { return '<option value="' + e[0] + '">' + escapeHtml(e[1].nome) + '</option>'; }).join('');
+  sel.innerHTML = (cursoId ? '<option value="">Selecione…</option>' : '<option value="">Selecione o curso primeiro…</option>') + opcoes;
   if (atual) sel.value = atual;
 }
 
