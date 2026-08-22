@@ -2681,9 +2681,92 @@ function renderCursosLista() {
   cont.innerHTML = cursos.map(function (entry) {
     const id = entry[0], c = entry[1];
     const turmas = Object.entries(turmasCache).filter(function (t) { return t[1].curso_id === id; })
-      .map(function (t) { return '<span class="chip">' + escapeHtml(t[1].nome) + '</span>'; }).join('') || '<span class="chip chip-empty">sem turmas</span>';
-    return '<div class="rua-row"><div class="rua-nome"><strong>' + escapeHtml(c.nome) + '</strong></div><div class="rua-chips">' + turmas + '</div></div>';
+      .map(function (t) {
+        const tid = t[0], tt = t[1];
+        return '<span class="chip chip-prateleira"><span class="chip-editar" data-tipo="turma" data-id="' + tid + '">' + escapeHtml(tt.nome) + '</span>' +
+          '<button type="button" class="chip-excluir" data-tipo="turma" data-id="' + tid + '" title="Excluir turma">✕</button></span>';
+      }).join('') || '<span class="chip chip-empty">sem turmas</span>';
+    return '<div class="rua-row"><div class="rua-nome"><strong>' + escapeHtml(c.nome) + '</strong></div>' +
+      '<div class="rua-chips">' + turmas + '</div>' +
+      '<div class="rua-acoes"><button type="button" class="btn-acao btn-editar-curso" data-id="' + id + '">Editar</button>' +
+      '<button type="button" class="btn-acao btn-excluir-curso" data-id="' + id + '">Excluir</button></div></div>';
   }).join('');
+
+  cont.querySelectorAll('.btn-editar-curso').forEach(function (btn) {
+    btn.addEventListener('click', function () { editarCursoRapido(btn.dataset.id); });
+  });
+  cont.querySelectorAll('.btn-excluir-curso').forEach(function (btn) {
+    btn.addEventListener('click', function () { excluirCurso(btn.dataset.id); });
+  });
+  cont.querySelectorAll('.chip-editar[data-tipo="turma"]').forEach(function (span) {
+    span.addEventListener('click', function () { editarTurmaRapido(span.dataset.id); });
+  });
+  cont.querySelectorAll('.chip-excluir[data-tipo="turma"]').forEach(function (btn) {
+    btn.addEventListener('click', function () { excluirTurma(btn.dataset.id); });
+  });
+}
+
+function editarCursoRapido(cursoId) {
+  exigirNivel('bibliotecario', function () {
+    const c = cursosCache[cursoId];
+    if (!c) return;
+    const novoNome = prompt('Nome do curso:', c.nome);
+    if (novoNome === null) return;
+    const nome = novoNome.trim();
+    if (!nome) { alert('Informe o nome do curso.'); return; }
+    const duplicado = Object.entries(cursosCache).some(function (e) { return e[0] !== cursoId && (e[1].nome || '').trim().toLowerCase() === nome.toLowerCase(); });
+    if (duplicado) { alert('Já existe outro curso com esse nome.'); return; }
+    if (!db) { firebaseIndisponivel(); return; }
+    db.ref('cursos/' + cursoId + '/nome').set(nome).catch(function (err) {
+      console.error(err);
+      alert('Erro ao salvar o curso.');
+    });
+  });
+}
+
+function excluirCurso(cursoId) {
+  exigirNivel('administrador', function () {
+    if (!db) { firebaseIndisponivel(); return; }
+    const temTurmas = Object.values(turmasCache).some(function (t) { return t.curso_id === cursoId; });
+    if (temTurmas) { alert('Este curso tem turmas cadastradas. Exclua as turmas dele primeiro.'); return; }
+    const c = cursosCache[cursoId];
+    if (!confirm('Excluir o curso "' + (c ? c.nome : '') + '"?')) return;
+    db.ref('cursos/' + cursoId).remove().catch(function (err) {
+      console.error(err);
+      alert('Erro ao excluir o curso.');
+    });
+  });
+}
+
+function editarTurmaRapido(turmaId) {
+  exigirNivel('bibliotecario', function () {
+    const t = turmasCache[turmaId];
+    if (!t) return;
+    const novoNome = prompt('Nome da turma:', t.nome);
+    if (novoNome === null) return;
+    const nome = novoNome.trim();
+    if (!nome) { alert('Informe o nome da turma.'); return; }
+    const duplicado = Object.entries(turmasCache).some(function (e) { return e[0] !== turmaId && e[1].curso_id === t.curso_id && (e[1].nome || '').trim().toLowerCase() === nome.toLowerCase(); });
+    if (duplicado) { alert('Esse curso já tem outra turma com esse nome.'); return; }
+    if (!db) { firebaseIndisponivel(); return; }
+    db.ref('turmas/' + turmaId + '/nome').set(nome).catch(function (err) {
+      console.error(err);
+      alert('Erro ao salvar a turma.');
+    });
+  });
+}
+
+function excluirTurma(turmaId) {
+  exigirNivel('administrador', function () {
+    if (!db) { firebaseIndisponivel(); return; }
+    const temLeitor = Object.values(leitoresCache).some(function (l) { return l.turma_id === turmaId; });
+    if (temLeitor) { alert('Esta turma tem leitores vinculados. Mude o curso/turma deles antes de excluir.'); return; }
+    if (!confirm('Excluir esta turma?')) return;
+    db.ref('turmas/' + turmaId).remove().catch(function (err) {
+      console.error(err);
+      alert('Erro ao excluir a turma.');
+    });
+  });
 }
 
 // ================= Leitores =================
